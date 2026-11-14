@@ -23,10 +23,10 @@ jobs:
           from pathlib import Path
           import re
           root=Path('.')
-          required=['index.html','assets/style.css','assets/main.js','guides/oem-odm-buyer-guide.html','robots.txt','sitemap.xml']+[f'products/{x}.html' for x in ['t300-ultra','a13-pro','m70-core','3050-ultra','mask','mat']]
+          required=['index.html','catalog.html','quality-process.html','assets/style.css','assets/main.js','guides/oem-odm-buyer-guide.html','robots.txt','sitemap.xml']+[f'products/{x}.html' for x in ['t300-ultra','a13-pro','m70-core','3050-ultra','mask','mat']]
           for name in required:
               assert (root/name).is_file(), 'Missing: '+name
-          for filename in ['index.html','guides/oem-odm-buyer-guide.html']+[f'products/{x}.html' for x in ['t300-ultra','a13-pro','m70-core','3050-ultra','mask','mat']]:
+          for filename in ['index.html','catalog.html','quality-process.html','guides/oem-odm-buyer-guide.html']+[f'products/{x}.html' for x in ['t300-ultra','a13-pro','m70-core','3050-ultra','mask','mat']]:
               content=(root/filename).read_text()
               assert '<title>' in content, 'Missing title: '+filename
               for url in re.findall(r'(?:href|src)="([^"#?]+)',content):
