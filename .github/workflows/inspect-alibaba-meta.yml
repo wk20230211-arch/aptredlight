@@ -1,0 +1,35 @@
+name: Inspect verified Alibaba model photo metadata
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-alibaba-meta.yml'
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect source product metadata without saving unverifiable assets
+        run: |
+          python -m pip -q install requests beautifulsoup4
+          python - <<'PY'
+          import re, requests
+          from bs4 import BeautifulSoup
+          pages = {
+            'MAT': 'https://www.alibaba.com/product-detail/APTREDLIGHT-Near-Infrared-Red-Light-Therapy_1601682275120.html',
+            'MASK': 'https://www.alibaba.com/product-detail/Silicone-LED-Therapy-Mask-Voice-Control_1601820507264.html',
+            'M70': 'https://www.alibaba.com/product-detail/APTREDLIGHT-10-Waves-APP-Music-Red_1601645925789.html'
+          }
+          for label, url in pages.items():
+            try:
+              r=requests.get(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'en-US,en;q=0.9'},timeout=25)
+              soup=BeautifulSoup(r.text,'html.parser')
+              print('PRODUCT',label,'STATUS',r.status_code,'TITLE',(soup.title.get_text(' ',strip=True) if soup.title else '')[:180],'LEN',len(r.content))
+              for m in soup.find_all('meta'):
+                if m.get('property') in ['og:image','og:title','og:url'] or m.get('name') in ['twitter:image','description']:
+                  print('META',m.get('property') or m.get('name'),(m.get('content') or '')[:320])
+              data=re.findall(r'https?:[^\\"\s<>]+?\.(?:jpg|jpeg|webp|png)(?:_960x960q80)?',r.text,re.I)
+              print('IMAGE_URLS', list(dict.fromkeys(data))[:5])
+            except Exception as exc:
+              print('ERROR',label,str(exc)[:220])
+          PY
