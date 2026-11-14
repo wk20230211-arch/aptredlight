@@ -1,4 +1,5 @@
 name: Public WWW domain and speed smoke test
+# Recheck after removing the Hostinger loop-producing root redirect
 on:
   push:
     branches: [main]
