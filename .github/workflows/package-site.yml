@@ -49,7 +49,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             rm -f aptredlight-live.zip
-            zip -q -r aptredlight-live.zip index.html assets guides products robots.txt sitemap.xml
+            zip -q -r aptredlight-live.zip index.html catalog.html quality-process.html assets guides products robots.txt sitemap.xml
             git add -f aptredlight-live.zip
             if git diff --cached --quiet; then echo "Release is already current"; exit 0; fi
             git commit -m "Build updated static release archive [skip ci]"
