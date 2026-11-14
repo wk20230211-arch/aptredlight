@@ -23,7 +23,7 @@ jobs:
             done
           done
           echo "=== HTTP response headers and timing ==="
-          for url in https://www.aptredlight.com/ https://aptredlight.com/ https://www.aptredlight.com/products/t300-ultra.html https://www.aptredlight.com/assets/photos/aptredlight-brand-banner.jpg https://www.aptredlight.com/assets/photos/alibaba-t300-family.webp https://www.aptredlight.com/assets/photos/alibaba-a13-family.webp https://www.aptredlight.com/assets/photos/alibaba-mask-family.webp; do
+          for url in https://www.aptredlight.com/ https://aptredlight.com/ https://www.aptredlight.com/products/t300-ultra.html https://www.aptredlight.com/assets/photos/aptredlight-brand-banner.jpg https://www.aptredlight.com/assets/photos/alibaba-t300-family.webp https://www.aptredlight.com/assets/photos/alibaba-a13-family.webp https://www.aptredlight.com/assets/photos/alibaba-mask-family.webp https://www.aptredlight.com/assets/photos/aptredlight-full-body-lamp-optimized.webp; do
             echo "$url"
             curl --location --max-redirs 5 --max-time 25 -A 'APTREDLIGHT-public-site-audit/1.0' -sS -o /tmp/site_body -D /tmp/site_header -w 'final_http=%{http_code} final_url=%{url_effective} time_dns=%{time_namelookup} time_connect=%{time_connect} time_tls=%{time_appconnect} time_first_byte=%{time_starttransfer} time_total=%{time_total} download=%{size_download}\n' "$url"
             grep -Ei '^(HTTP/|location:|cache-control:|content-type:|content-encoding:|age:|server:)' /tmp/site_header | tail -15
@@ -36,6 +36,8 @@ jobs:
           curl -fsSL --max-redirs 5 --max-time 30 'https://www.aptredlight.com/?site-audit=20261115' -o /tmp/apt_home
           grep -Eiq 'APTREDLIGHT' /tmp/apt_home
           grep -Eiq 'Red light therapy products. Built for your brand.|Build your next red light therapy product line.' /tmp/apt_home
+          grep -q 'assets/photos/alibaba-t300-family.webp' /tmp/apt_home
+          grep -q 'assets/photos/alibaba-mask-family.webp' /tmp/apt_home
           echo "WWW current home copy verified"
           for photo in alibaba-t300-family.webp alibaba-a13-family.webp alibaba-mask-family.webp; do
             curl --fail -sSL --max-time 20 -o /tmp/$photo -w "$photo code=%{http_code} total=%{time_total} size=%{size_download} bytes\n" "https://www.aptredlight.com/assets/photos/$photo"
