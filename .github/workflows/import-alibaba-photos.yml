@@ -1,0 +1,56 @@
+name: Import verified Alibaba APTREDLIGHT product photos
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/import-alibaba-photos.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  photos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download only verified APTREDLIGHT Alibaba listing imagery
+        run: |
+          python -m pip -q install Pillow
+          python - <<'PY'
+          from PIL import Image, ImageOps
+          from urllib.request import Request, urlopen
+          from io import BytesIO
+          from pathlib import Path
+          sources = {
+            # Confirmed APTREDLIGHT Alibaba listing, 300-LED T300 panel family (not verified T300 Ultra)
+            'alibaba-t300-family.webp': 'https://s.alicdn.com/%40sc04/kf/H103b5d7583bd467a8698ef40433c10adp.jpg_960x960q80.jpg',
+            # Confirmed APTREDLIGHT Alibaba listing, A13 panel family (not verified A13 Pro)
+            'alibaba-a13-family.webp': 'https://s.alicdn.com/%40sc04/kf/H7697ff1818e04ad192b0ba8262b77e09M.jpg_960x960q80.jpg',
+          }
+          output = Path('assets/photos')
+          output.mkdir(parents=True, exist_ok=True)
+          for name, url in sources.items():
+              req = Request(url, headers={'User-Agent':'Mozilla/5.0 APTREDLIGHT site image importer','Accept':'image/avif,image/webp,image/*,*/*'})
+              with urlopen(req, timeout=35) as response:
+                  binary = response.read(8_000_000)
+              img = Image.open(BytesIO(binary))
+              img.load()
+              if min(img.size) < 250: raise ValueError('Unexpected low-resolution image '+name+': '+str(img.size))
+              img = ImageOps.exif_transpose(img).convert('RGB')
+              img.thumbnail((980,980), Image.Resampling.LANCZOS)
+              img.save(output/name, format='WEBP', quality=78, method=6)
+              print('VALIDATED',name,img.size,(output/name).stat().st_size)
+          PY
+      - name: Commit self-hosted optimized Alibaba photos
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/photos/alibaba-*.webp
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Import self-hosted official Alibaba product family photos [skip ci]"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 3
+          done
+          exit 1
