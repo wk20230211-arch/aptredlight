@@ -11,6 +11,9 @@ on:
       - 'sitemap.xml'
       - '.github/workflows/package-site.yml'
   workflow_dispatch:
+concurrency:
+  group: aptredlight-static-release-main
+  cancel-in-progress: false
 permissions:
   contents: write
 jobs:
