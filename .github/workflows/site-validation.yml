@@ -1,0 +1,30 @@
+name: Validate APTREDLIGHT website
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate HTML paths and required files
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root=Path('.')
+          required=['index.html','assets/style.css','assets/main.js','guides/oem-odm-buyer-guide.html','robots.txt','sitemap.xml']
+          for name in required:
+              assert (root/name).is_file(), 'Missing: '+name
+          for filename in ['index.html','guides/oem-odm-buyer-guide.html']:
+              content=(root/filename).read_text()
+              assert '<title>' in content, 'Missing title: '+filename
+              for url in re.findall(r'(?:href|src)="([^"#?]+)',content):
+                  if url.startswith(('https:','http:','mailto:','#','javascript:')): continue
+                  path=(root/filename).parent/url
+                  if not path.exists():
+                      raise AssertionError(f'{filename}: resource not found: {url}')
+          print('APTREDLIGHT basic site validation passed')
+          PY
