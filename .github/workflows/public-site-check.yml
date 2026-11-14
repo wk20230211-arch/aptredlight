@@ -1,0 +1,38 @@
+name: Public WWW domain and speed smoke test
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/public-site-check.yml'
+  workflow_dispatch:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: DNS resolution and redirect checks
+        run: |
+          set +e
+          echo "=== DNS with multiple resolvers ==="
+          for server in 1.1.1.1 8.8.8.8; do
+            echo "Resolver: $server"
+            for host in aptredlight.com www.aptredlight.com; do
+              dig +time=4 +tries=1 @"$server" "$host" A +short
+              dig +time=4 +tries=1 @"$server" "$host" CNAME +short
+            done
+          done
+          echo "=== HTTP response headers and timing ==="
+          for url in https://www.aptredlight.com/ https://aptredlight.com/ https://www.aptredlight.com/products/t300-ultra.html https://www.aptredlight.com/assets/photos/aptredlight-brand-banner.jpg; do
+            echo "$url"
+            curl --location --max-redirs 5 --max-time 25 -A 'APTREDLIGHT-public-site-audit/1.0' -sS -o /tmp/site_body -D /tmp/site_header -w 'final_http=%{http_code} final_url=%{url_effective} time_dns=%{time_namelookup} time_connect=%{time_connect} time_tls=%{time_appconnect} time_first_byte=%{time_starttransfer} time_total=%{time_total} download=%{size_download}\n' "$url"
+            grep -Ei '^(HTTP/|location:|cache-control:|content-type:|content-encoding:|age:|server:)' /tmp/site_header | tail -15
+            if [ "$url" = "https://www.aptredlight.com/" ]; then
+              grep -o -m1 -E 'Red light therapy products\. Built for your brand\.|Build your next red light therapy product line\.|Red Light Therapy Solutions Built for Your Market' /tmp/site_body || :
+            fi
+          done
+      - name: Strict WWW basic response assertion
+        run: |
+          curl -fsSL --max-redirs 5 --max-time 30 'https://www.aptredlight.com/?site-audit=20261115' -o /tmp/apt_home
+          grep -Eiq 'APTREDLIGHT' /tmp/apt_home
+          grep -Eiq 'Red light therapy products. Built for your brand.|Build your next red light therapy product line.' /tmp/apt_home
+          echo "WWW current home copy verified"
