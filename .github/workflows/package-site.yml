@@ -6,6 +6,7 @@ on:
       - 'index.html'
       - 'assets/**'
       - 'guides/**'
+      - 'products/**'
       - 'robots.txt'
       - 'sitemap.xml'
       - '.github/workflows/package-site.yml'
@@ -33,7 +34,7 @@ jobs:
           done
       - name: Create deploy archive
         run: |
-          zip -q -r aptredlight-live.zip index.html assets guides robots.txt sitemap.xml
+          zip -q -r aptredlight-live.zip index.html assets guides products robots.txt sitemap.xml
           unzip -l aptredlight-live.zip
       - name: Store release archive in repository
         run: |
