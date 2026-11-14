@@ -13,7 +13,8 @@ jobs:
         run: |
           python -m pip -q install requests beautifulsoup4
           python - <<'PY'
-          import requests,re,html
+          import requests,re,html,json
+          from bs4 import BeautifulSoup
           urls = {
              'MASK': 'https://www.alibaba.com/category/led-mask_100001831.html',
              'MAT': 'https://www.alibaba.com/catalog/Red-Light-Therapy-Bed_cid202000203?sortType=prodSold180',
@@ -24,6 +25,18 @@ jobs:
             try:
               response=requests.get(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'en-US,en;q=0.9'},timeout=20)
               raw=response.text
+              soup=BeautifulSoup(raw,'html.parser')
+              for tag in soup.select('script[type="application/ld+json"]'):
+                try: data=json.loads(tag.get_text())
+                except: continue
+                def walk(obj):
+                  if isinstance(obj,dict):
+                    if obj.get('@type') == 'Product' and 'APTREDLIGHT' in str(obj.get('name','')).upper():
+                      print('CONFIRMED_STRUCTURED',label,'NAME',str(obj.get('name'))[:160],'IMAGE',str(obj.get('image'))[:260],'OFFER',str(obj.get('offers',{}).get('url',''))[:180])
+                    for child in obj.values(): walk(child)
+                  elif isinstance(obj,list):
+                    for child in obj: walk(child)
+                walk(data)
               print('SOURCE',label,'HTTP',response.status_code,'LENGTH',len(raw),'APTREDLIGHT_COUNT',raw.lower().count('aptredlight'))
               matches=list(re.finditer(r'aptredlight',raw,re.I))
               for m in matches[:4]:
