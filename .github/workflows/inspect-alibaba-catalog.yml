@@ -25,6 +25,13 @@ jobs:
             try:
               response=requests.get(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'en-US,en;q=0.9'},timeout=20)
               raw=response.text
+              needles = ['1601928813984','APTREDLIGHT 300 Led Mask Face','APTREDLIGHT Led Light Therapy Facial Mask']
+              for needle in needles:
+                for match in list(re.finditer(re.escape(needle),raw,re.I))[:2]:
+                  s=raw[max(0,match.start()-900):match.start()+1200]
+                  names=re.findall(r'originalFileName[^@]{0,200}',s)
+                  links=re.findall(r'(?:image|img|fileName)[^\"\\]{0,160}',s,re.I)
+                  print('CANDIDATE_CONTEXT',label,needle,'FILE_NAMES',names[:5],'IMAGES',links[:5],'SNIP',s[:1000].replace('\\\"','\"'))
               soup=BeautifulSoup(raw,'html.parser')
               for img in soup.find_all('img'):
                 alt=img.get('alt','')
