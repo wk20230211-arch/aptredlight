@@ -9,6 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate JavaScript syntax and inquiry destination
+        run: |
+          node --check assets/main.js
+          grep -q 'wa.me/8618823435519' assets/main.js
+          if grep -q 'postmaster@aptredlight.com' assets/main.js; then
+            echo "Blocked: known bouncing postmaster recipient"
+            exit 1
+          fi
       - name: Validate HTML paths and required files
         run: |
           python3 - <<'PY'
