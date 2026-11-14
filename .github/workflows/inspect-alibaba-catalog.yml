@@ -26,6 +26,11 @@ jobs:
               response=requests.get(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'en-US,en;q=0.9'},timeout=20)
               raw=response.text
               soup=BeautifulSoup(raw,'html.parser')
+              for img in soup.find_all('img'):
+                alt=img.get('alt','')
+                if 'APTREDLIGHT' in alt.upper():
+                  a=img.find_parent('a',href=True)
+                  print('VERIFIED_CARD_CANDIDATE',label,'ALT',alt[:170],'IMG',str(img.get('src') or img.get('data-src'))[:240],'LINK',str(a.get('href') if a else '')[:180])
               for tag in soup.select('script[type="application/ld+json"]'):
                 try: data=json.loads(tag.get_text())
                 except: continue
