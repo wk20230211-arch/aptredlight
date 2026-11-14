@@ -39,22 +39,23 @@ jobs:
         run: |
           zip -q -r aptredlight-live.zip index.html assets guides products robots.txt sitemap.xml
           unzip -l aptredlight-live.zip
-      - name: Store release archive in repository
+      - name: Store refreshed archive with concurrent-update safety
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f aptredlight-live.zip assets/photos/
-          if ! git diff --cached --quiet; then
-            git commit -m "Build static release archive [skip ci]"
-            for attempt in 1 2 3 4 5; do
-              git fetch origin main
-              git rebase origin/main
-              if git push origin HEAD:main; then
-                echo "Release archive committed"
-                exit 0
-              fi
-              sleep 3
-            done
-            echo "Release commit failed after retries"
-            exit 1
-          fi
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            rm -f aptredlight-live.zip
+            zip -q -r aptredlight-live.zip index.html assets guides products robots.txt sitemap.xml
+            git add -f aptredlight-live.zip
+            if git diff --cached --quiet; then echo "Release is already current"; exit 0; fi
+            git commit -m "Build updated static release archive [skip ci]"
+            if git push origin HEAD:main; then
+              echo "Release committed to GitHub"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Failed to publish archive after retrying"
+          exit 1
