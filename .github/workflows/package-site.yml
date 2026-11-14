@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'index.html'
+      - 'catalog.html'
+      - 'quality-process.html'
       - 'assets/**'
       - 'guides/**'
       - 'products/**'
@@ -37,7 +39,7 @@ jobs:
           done
       - name: Create deploy archive
         run: |
-          zip -q -r aptredlight-live.zip index.html assets guides products robots.txt sitemap.xml
+          zip -q -r aptredlight-live.zip index.html catalog.html quality-process.html assets guides products robots.txt sitemap.xml
           unzip -l aptredlight-live.zip
       - name: Store refreshed archive with concurrent-update safety
         run: |
