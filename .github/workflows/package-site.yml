@@ -26,6 +26,15 @@ jobs:
           test -f assets/main.js
           test -f guides/oem-odm-buyer-guide.html
           grep -q 'www.aptredlight.com' index.html
+      - name: Retrieve APTREDLIGHT product photos
+        run: |
+          mkdir -p assets/photos
+          for photo in aptredlight-brand-banner.jpg aptredlight-therapy-panel.jpg aptredlight-touch-button-panel.webp aptredlight-sleeping-bag.jpg aptredlight-full-body-lamp.png; do
+            curl --fail --location --retry 3 --max-time 60 --silent --show-error \
+              "https://aptredlight.com/wp-content/uploads/2026/11/$photo" -o "assets/photos/$photo"
+            test -s "assets/photos/$photo"
+          done
+          file assets/photos/*
       - name: Create deploy archive
         run: |
           zip -q -r aptredlight-live.zip index.html assets guides robots.txt sitemap.xml
@@ -34,7 +43,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f aptredlight-live.zip
+          git add -f aptredlight-live.zip assets/photos/
           if ! git diff --cached --quiet; then
             git commit -m "Build static release archive [skip ci]"
             git push origin HEAD:main
