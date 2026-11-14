@@ -1,0 +1,43 @@
+name: Optimize APTREDLIGHT self-owned gallery images
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/optimize-existing-images.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create browser-efficient versions without modifying originals
+        run: |
+          python -m pip -q install Pillow
+          python - <<'PY'
+          from PIL import Image,ImageOps
+          from pathlib import Path
+          folder=Path('assets/photos')
+          for name in ['aptredlight-brand-banner.jpg','aptredlight-full-body-lamp.png','aptredlight-sleeping-bag.jpg','aptredlight-therapy-panel.jpg']:
+            source=folder/name
+            im=ImageOps.exif_transpose(Image.open(source)).convert('RGB')
+            im.thumbnail((1500,1500),Image.Resampling.LANCZOS)
+            dest=folder/(source.stem+'-optimized.webp')
+            im.save(dest,'WEBP',quality=80,method=6)
+            print(name,source.stat().st_size,'->',dest.name,dest.stat().st_size,'pixels',im.size)
+          PY
+      - name: Commit only generated optimized media
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3 4; do
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort; exit 1; }
+            git add -f assets/photos/*-optimized.webp
+            if git diff --cached --quiet; then exit 0; fi
+            git commit -m 'Add optimized first-party gallery WebP assets [skip ci]'
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 2
+          done
+          exit 1
