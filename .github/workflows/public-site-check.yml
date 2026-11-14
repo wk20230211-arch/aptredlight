@@ -23,7 +23,7 @@ jobs:
             done
           done
           echo "=== HTTP response headers and timing ==="
-          for url in https://www.aptredlight.com/ https://aptredlight.com/ https://www.aptredlight.com/products/t300-ultra.html https://www.aptredlight.com/assets/photos/aptredlight-brand-banner.jpg https://www.aptredlight.com/assets/photos/alibaba-t300-family.webp https://www.aptredlight.com/assets/photos/alibaba-a13-family.webp https://www.aptredlight.com/assets/photos/alibaba-mask-family.webp https://www.aptredlight.com/assets/photos/aptredlight-full-body-lamp-optimized.webp; do
+          for url in https://www.aptredlight.com/ https://aptredlight.com/ https://www.aptredlight.com/catalog.html https://www.aptredlight.com/quality-process.html https://www.aptredlight.com/products/t300-ultra.html https://www.aptredlight.com/assets/photos/aptredlight-brand-banner.jpg https://www.aptredlight.com/assets/photos/alibaba-t300-family.webp https://www.aptredlight.com/assets/photos/alibaba-a13-family.webp https://www.aptredlight.com/assets/photos/alibaba-mask-family.webp https://www.aptredlight.com/assets/photos/aptredlight-full-body-lamp-optimized.webp; do
             echo "$url"
             curl --location --max-redirs 5 --max-time 25 -A 'APTREDLIGHT-public-site-audit/1.0' -sS -o /tmp/site_body -D /tmp/site_header -w 'final_http=%{http_code} final_url=%{url_effective} time_dns=%{time_namelookup} time_connect=%{time_connect} time_tls=%{time_appconnect} time_first_byte=%{time_starttransfer} time_total=%{time_total} download=%{size_download}\n' "$url"
             grep -Ei '^(HTTP/|location:|cache-control:|content-type:|content-encoding:|age:|server:)' /tmp/site_header | tail -15
@@ -44,3 +44,11 @@ jobs:
             test $(wc -c </tmp/$photo) -gt 10000
           done
           echo 'Official Alibaba product-family WebP images verified'
+          curl -fsSL --max-time 25 'https://www.aptredlight.com/catalog.html' -o /tmp/apt_catalog
+          grep -q 'Find the right product format' /tmp/apt_catalog
+          grep -q 'T300 ULTRA' /tmp/apt_catalog
+          grep -q 'MAT / SLEEPING BAG' /tmp/apt_catalog
+          curl -fsSL --max-time 25 'https://www.aptredlight.com/quality-process.html' -o /tmp/apt_quality
+          grep -q 'Incoming component verification' /tmp/apt_quality
+          grep -q 'Packing & repeat-order handover' /tmp/apt_quality
+          echo 'PUBLIC CATALOG AND QUALITY PAGES VERIFIED'
