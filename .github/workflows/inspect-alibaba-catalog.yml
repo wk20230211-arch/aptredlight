@@ -29,10 +29,10 @@ jobs:
                 for tag in ('1601928813984','APTREDLIGHT 360 Full Body Coverage Nir'):
                   m=re.search(re.escape(tag),raw,re.I)
                   if m:
-                    frag=raw[max(0,m.start()-5500):m.end()+1500]
+                    frag=raw[max(0,m.start()-1200):m.end()+200]
                     names=re.findall(r'originalFileName.{0,200}',frag,re.I)
                     urls2=re.findall(r'(?:(?:https?:)?//s\\.alicdn\\.com/|H[a-zA-Z0-9]{25,}\\.jpg)[^\"\\\\ ]*',frag)
-                    print('MAT_PRODUCT_DETAIL',tag,'FILENAMES',names[-8:],'URLS',urls2[-8:],'CONTEXT',frag[-1800:].replace('\\\"','\"'))
+                    print('MAT_PRODUCT_DETAIL',tag,'FILENAMES',names[-8:],'URLS',urls2[-8:],'CONTEXT',frag.replace('\\\"','\"'))
               needles = ['1601928813984','APTREDLIGHT 300 Led Mask Face','APTREDLIGHT Led Light Therapy Facial Mask']
               for needle in needles:
                 for match in list(re.finditer(re.escape(needle),raw,re.I))[:2]:
