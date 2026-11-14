@@ -25,6 +25,8 @@ jobs:
             'alibaba-t300-family.webp': 'https://s.alicdn.com/%40sc04/kf/H103b5d7583bd467a8698ef40433c10adp.jpg_960x960q80.jpg',
             # Confirmed APTREDLIGHT Alibaba listing, A13 panel family (not verified A13 Pro)
             'alibaba-a13-family.webp': 'https://s.alicdn.com/%40sc04/kf/H7697ff1818e04ad192b0ba8262b77e09M.jpg_960x960q80.jpg',
+            # APTREDLIGHT 300 LED Mask from Alibaba's product catalog structured data
+            'alibaba-mask-family.webp': 'https://s.alicdn.com/%40sc04/kf/H1b9bbc81b20d4d749f90ec01cfad1e3e5.jpg_960x960q80.jpg',
           }
           output = Path('assets/photos')
           output.mkdir(parents=True, exist_ok=True)
