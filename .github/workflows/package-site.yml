@@ -6,6 +6,8 @@ on:
       - 'index.html'
       - 'catalog.html'
       - 'quality-process.html'
+      - 'rfq.html'
+      - 'resources/**'
       - 'assets/**'
       - 'guides/**'
       - 'products/**'
@@ -28,6 +30,8 @@ jobs:
       - name: Validate site
         run: |
           test -f index.html
+          test -s resources/oem-private-label-buyers-checklist.pdf
+          test -f rfq.html
           test -f assets/style.css
           test -f assets/main.js
           test -f guides/oem-odm-buyer-guide.html
@@ -39,7 +43,7 @@ jobs:
           done
       - name: Create deploy archive
         run: |
-          zip -q -r aptredlight-live.zip index.html catalog.html quality-process.html assets guides products robots.txt sitemap.xml
+          zip -q -r aptredlight-live.zip index.html catalog.html quality-process.html rfq.html resources assets guides products robots.txt sitemap.xml
           unzip -l aptredlight-live.zip
       - name: Store refreshed archive with concurrent-update safety
         run: |
@@ -49,7 +53,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             rm -f aptredlight-live.zip
-            zip -q -r aptredlight-live.zip index.html catalog.html quality-process.html assets guides products robots.txt sitemap.xml
+            zip -q -r aptredlight-live.zip index.html catalog.html quality-process.html rfq.html resources assets guides products robots.txt sitemap.xml
             git add -f aptredlight-live.zip
             if git diff --cached --quiet; then echo "Release is already current"; exit 0; fi
             git commit -m "Build updated static release archive [skip ci]"
