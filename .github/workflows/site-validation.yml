@@ -12,6 +12,9 @@ jobs:
       - name: Validate JavaScript syntax and inquiry destination
         run: |
           node --check assets/main.js
+          grep -q 'rfq-form' rfq.html
+          grep -q 'Continue RFQ on WhatsApp' rfq.html
+          test -s resources/oem-private-label-buyers-checklist.pdf
           grep -q 'wa.me/8618823435519' assets/main.js
           if grep -q 'postmaster@aptredlight.com' assets/main.js; then
             echo "Blocked: known bouncing postmaster recipient"
@@ -23,10 +26,10 @@ jobs:
           from pathlib import Path
           import re
           root=Path('.')
-          required=['index.html','catalog.html','quality-process.html','assets/style.css','assets/main.js','guides/oem-odm-buyer-guide.html','robots.txt','sitemap.xml']+[f'products/{x}.html' for x in ['t300-ultra','a13-pro','m70-core','3050-ultra','mask','mat']]
+          required=['index.html','catalog.html','quality-process.html','rfq.html','resources/oem-private-label-buyers-checklist.pdf','assets/style.css','assets/main.js','guides/oem-odm-buyer-guide.html','robots.txt','sitemap.xml']+[f'products/{x}.html' for x in ['t300-ultra','a13-pro','m70-core','3050-ultra','mask','mat']]
           for name in required:
               assert (root/name).is_file(), 'Missing: '+name
-          for filename in ['index.html','catalog.html','quality-process.html','guides/oem-odm-buyer-guide.html']+[f'products/{x}.html' for x in ['t300-ultra','a13-pro','m70-core','3050-ultra','mask','mat']]:
+          for filename in ['index.html','catalog.html','quality-process.html','rfq.html','guides/oem-odm-buyer-guide.html']+[f'products/{x}.html' for x in ['t300-ultra','a13-pro','m70-core','3050-ultra','mask','mat']]:
               content=(root/filename).read_text()
               assert '<title>' in content, 'Missing title: '+filename
               for url in re.findall(r'(?:href|src)="([^"#?]+)',content):
