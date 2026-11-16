@@ -1,0 +1,49 @@
+name: Import user's supplied touchscreen panel lifestyle hero
+on:
+  push:
+    paths: ['.github/workflows/import-touchscreen-hero.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve the uploaded user-owned image through temporary Canva media URL
+        env:
+          SOURCE: 'https://media.canva.com/v2/image-resize/format:PNG/height:200/quality:100/uri:ifs%3A%2F%2FM%2Fdf6a2f7a-dbc4-425b-a60c-d6ed874eabd4/watermark:F/width:200?csig=AAAAAAAAAAAAAAAAAAAAAGF0dKW5MzGh9TX4JVyA1gptCSXj59fjNsoKAzNMg_HR&exp=1794810797&osig=AAAAAAAAAAAAAAAAAAAAAOdboZLX4lDBSuMRWduFQ5wXzp0-m8Dlp_YPThvWAaW3&signer=media-rpc&token=AAIAAU0AJGRmNmEyZjdhLWRiYzQtNDI1Yi1hNjBjLWQ2ZWQ4NzRlYWJkNAAAAAABoeMPW8hZmXh2_HyBXRR3k3hkxQWCUuvy8G3jcyuWRwCAAAT7Eg&x-canva-quality=thumbnail'
+        run: |
+          python -m pip -q install Pillow requests
+          python - <<'PY'
+          import os, requests
+          from PIL import Image
+          from io import BytesIO
+          from pathlib import Path
+          url=os.environ['SOURCE']
+          for name,variant in [('signed-preview',url),('full-resolution',url.replace('height:200','height:1254').replace('width:200','width:1254')),('without-size',url.replace('height:200/','').replace('/width:200',''))]:
+            try:
+              r=requests.get(variant, timeout=25)
+              print('VARIANT',name,'STATUS',r.status_code,'BYTES',len(r.content),'CTYPE',r.headers.get('content-type'))
+              if r.ok and r.headers.get('content-type','').startswith('image/'):
+                im=Image.open(BytesIO(r.content));print('DIMENSIONS',name,im.size)
+                if name=='full-resolution' or (name=='signed-preview' and not Path('assets/photos/touchscreen-panel-lifestyle-user.webp').exists()):
+                  dest=Path('assets/photos/touchscreen-panel-lifestyle-user.webp')
+                  im.convert('RGB').save(dest,'WEBP',quality=82,method=6)
+            except Exception as e: print('FAILED',name,str(e))
+          if not Path('assets/photos/touchscreen-panel-lifestyle-user.webp').exists():raise SystemExit('No image available')
+          PY
+      - name: Commit the image asset
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f assets/photos/touchscreen-panel-lifestyle-user.webp
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Import user supplied touchscreen panel lifestyle photograph [skip ci]'
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 3
+          done
+          exit 1
