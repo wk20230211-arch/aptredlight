@@ -16,7 +16,10 @@ if pointer['source_origin'] != ORIGIN or pointer['project_id'] != PROJECT:
 def download(path):
     request = urllib.request.Request(ORIGIN + '/' + urllib.parse.quote(path) + '?release=' + pointer['manifest_sha256'], headers={'User-Agent': 'APTREDLIGHT-Release-Sync/1.0', 'Cache-Control': 'no-cache'})
     with urllib.request.urlopen(request, timeout=90) as response:
-        if urllib.parse.urlsplit(response.url).netloc != urllib.parse.urlsplit(ORIGIN).netloc:
+        allowed_hosts = {urllib.parse.urlsplit(ORIGIN).netloc}
+        if path.startswith('assets/'):
+            allowed_hosts.add('www.aptredlight.com')
+        if urllib.parse.urlsplit(response.url).netloc not in allowed_hosts:
             raise ValueError('Unexpected redirect origin')
         return response.read(100_000_001)
 
