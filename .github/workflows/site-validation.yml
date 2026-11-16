@@ -15,7 +15,7 @@ jobs:
           grep -q 'rfq-form' rfq.html
           grep -q 'Continue RFQ on WhatsApp' rfq.html
           test -s resources/oem-private-label-buyers-checklist.pdf
-          grep -q 'wa.me/8618823435519' assets/main.js
+          grep -q "WA_NUMBER='8618823435519'" assets/main.js
           if grep -q 'postmaster@aptredlight.com' assets/main.js; then
             echo "Blocked: known bouncing postmaster recipient"
             exit 1
