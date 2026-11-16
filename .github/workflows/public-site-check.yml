@@ -39,7 +39,10 @@ jobs:
           grep -q 'assets/photos/alibaba-t300-family.webp' /tmp/apt_home
           grep -q 'assets/photos/alibaba-mask-family.webp' /tmp/apt_home
           grep -q 'assets/photos/touchscreen-panel-lifestyle-user.webp' /tmp/apt_home
-          echo "WWW updated touchscreen hero reference verified"
+          grep -q 'Red Light Therapy OEM/ODM Manufacturer' /tmp/apt_home
+          grep -q '10,000' /tmp/apt_home
+          grep -q 'Two sourcing paths' /tmp/apt_home
+          echo "WWW verified manufacturer H1 and sourcing proof"
           for photo in alibaba-t300-family.webp alibaba-a13-family.webp alibaba-mask-family.webp; do
             curl --fail -sSL --max-time 20 -o /tmp/$photo -w "$photo code=%{http_code} total=%{time_total} size=%{size_download} bytes\n" "https://www.aptredlight.com/assets/photos/$photo"
             test $(wc -c </tmp/$photo) -gt 10000
