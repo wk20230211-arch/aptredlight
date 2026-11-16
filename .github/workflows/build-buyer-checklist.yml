@@ -1,0 +1,39 @@
+name: Build PDF buyer checklist
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'resources/oem-private-label-buyers-checklist.md'
+      - 'tools/build_checklist.py'
+      - '.github/workflows/build-buyer-checklist.yml'
+  workflow_dispatch:
+concurrency:
+  group: aptredlight-checklist-pdf
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate readable A4 checklist PDF
+        run: |
+          python -m pip -q install reportlab
+          python tools/build_checklist.py
+          test -s resources/oem-private-label-buyers-checklist.pdf
+      - name: Commit PDF using latest source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            python tools/build_checklist.py
+            git add -f resources/oem-private-label-buyers-checklist.pdf
+            if git diff --cached --quiet; then exit 0; fi
+            git commit -m "Update OEM private-label checklist PDF [skip ci]"
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 3
+          done
+          exit 1
