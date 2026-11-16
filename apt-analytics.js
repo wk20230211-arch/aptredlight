@@ -3,7 +3,7 @@
  'use strict';
  if(window.__aptAnalyticsInstalled)return;
  window.__aptAnalyticsInstalled=true;
- const routes=/^\/(?:$|(?:de|fr|es|zh-CN)\/?$|(?:de\/|fr\/|es\/|zh-CN\/)?products\/[a-z0-9-]+\.html$|guides\/(?:[a-z0-9-]+\.html)?$|(?:oem-odm|technical-documentation|catalog|rfq|quality-process)\.html$)/;
+ const routes=/^\/(?:$|(?:de|fr|es|zh-CN)\/?$|(?:de\/|fr\/|es\/|zh-CN\/)?products\/[a-z0-9-]+\.html$|guides\/(?:[a-z0-9-]+\.html)?$|solutions\/(?:index\.html|(?:red-light-panels|portable-red-light|led-mask|flexible-mat|full-body)-oem\.html)?$|(?:oem-odm|technical-documentation|catalog|rfq|quality-process|product-library|certificates|privacy)\.html$)/;
  const path=routes.test(location.pathname)?location.pathname:'(other)';
  const language=(document.documentElement.lang||'en').split('-')[0];
  const seenEvents=new WeakSet();const startedForms=new Set();
@@ -25,7 +25,7 @@
   if(host==='wa.me'||host==='api.whatsapp.com'||host==='web.whatsapp.com'){emit('whatsapp_click',{action_location:t.id==='whatsapp-enquiry'||t.id==='intl-whatsapp'?'prepared_rfq':'direct_link'});return}
   if(host==='alibaba.com'||host.endsWith('.alibaba.com')){emit('alibaba_click',{action_location:t.id==='alibaba-enquiry'?'prepared_rfq':'catalog_link'});return}
   if(url.origin===location.origin&&/\.pdf$/i.test(url.pathname)){emit('spec_download',{document_type:url.pathname.includes('checklist')?'buyer_checklist':'product_document'});return}
-  if(url.origin===location.origin&&(/^#(?:rfq-contact|contact|inquiry|intl-inquiry)$/.test(url.hash)||/\/rfq\.html$/.test(url.pathname))){emit('quote_cta_click',{action_location:'quote_link'})}
+  if(url.origin===location.origin&&(/^#(?:rfq-contact|contact|inquiry|intl-inquiry|enquiry|b2b-inquiry)$/.test(url.hash)||/\/rfq\.html$/.test(url.pathname))){emit('quote_cta_click',{action_location:'quote_link'})}
  },true);
  document.addEventListener('input',start,true);
  document.addEventListener('change',start,true);
