@@ -55,4 +55,12 @@ jobs:
           curl -fsSL --max-time 25 'https://www.aptredlight.com/quality-process.html' -o /tmp/apt_quality
           grep -q 'Incoming component verification' /tmp/apt_quality
           grep -q 'Packing & repeat-order handover' /tmp/apt_quality
+          curl -fsSL --max-time 25 'https://www.aptredlight.com/rfq.html' -o /tmp/apt_rfq
+          grep -q 'Continue RFQ on WhatsApp' /tmp/apt_rfq
+          grep -q 'We review project requirements' /tmp/apt_rfq
+          grep -q 'name="quantity"' /tmp/apt_rfq
+          curl -fsSL --max-time 25 'https://www.aptredlight.com/resources/oem-private-label-buyers-checklist.pdf' -o /tmp/apt_checklist.pdf
+          head -c 4 /tmp/apt_checklist.pdf | grep -q '%PDF'
+          test "$(wc -c </tmp/apt_checklist.pdf)" -gt 5000
+          echo 'PUBLIC RFQ AND BUYER CHECKLIST VERIFIED'
           echo 'PUBLIC CATALOG AND QUALITY PAGES VERIFIED'
