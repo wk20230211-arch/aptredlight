@@ -14,7 +14,7 @@ if pointer['source_origin'] != ORIGIN or pointer['project_id'] != PROJECT:
     raise ValueError('Release source must be the approved APTREDLIGHT Sites project')
 
 def download(path):
-    request = urllib.request.Request(ORIGIN + '/' + urllib.parse.quote(path), headers={'User-Agent': 'APTREDLIGHT-Release-Sync/1.0', 'Cache-Control': 'no-cache'})
+    request = urllib.request.Request(ORIGIN + '/' + urllib.parse.quote(path) + '?release=' + pointer['manifest_sha256'], headers={'User-Agent': 'APTREDLIGHT-Release-Sync/1.0', 'Cache-Control': 'no-cache'})
     with urllib.request.urlopen(request, timeout=90) as response:
         if urllib.parse.urlsplit(response.url).netloc != urllib.parse.urlsplit(ORIGIN).netloc:
             raise ValueError('Unexpected redirect origin')
@@ -42,7 +42,7 @@ if 'index.html' not in seen or len(seen) > 5000:
     raise ValueError('Incomplete or oversized release')
 
 def mirror(item):
-    data = download(item['path'])
+    data = item['content'].encode('utf-8') if 'content' in item else download(item['path'])
     if len(data) != item['size'] or hashlib.sha256(data).hexdigest() != item['sha256']:
         raise ValueError('File verification failed: ' + item['path'])
     path = out / item['path']
