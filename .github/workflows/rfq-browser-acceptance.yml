@@ -4,6 +4,10 @@ on:
     branches: [main]
     paths:
       - 'tools/test_rfq.mjs'
+      - 'rfq.html'
+      - 'index.html'
+      - 'assets/main.js'
+      - 'resources/oem-private-label-buyers-checklist.pdf'
       - '.github/workflows/rfq-browser-acceptance.yml'
   workflow_dispatch:
 jobs:
