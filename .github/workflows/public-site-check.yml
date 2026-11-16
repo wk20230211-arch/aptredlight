@@ -35,7 +35,7 @@ jobs:
         run: |
           curl -fsSL --max-redirs 5 --max-time 30 'https://www.aptredlight.com/?site-audit=20261115' -o /tmp/apt_home
           grep -Eiq 'APTREDLIGHT' /tmp/apt_home
-          grep -Eiq 'Red light therapy products. Built for your brand.|Build your next red light therapy product line.' /tmp/apt_home
+          grep -Fq 'Red Light Therapy OEM/ODM Manufacturer' /tmp/apt_home
           grep -q 'assets/photos/alibaba-t300-family.webp' /tmp/apt_home
           grep -q 'assets/photos/alibaba-mask-family.webp' /tmp/apt_home
           grep -q 'assets/photos/touchscreen-panel-lifestyle-user.webp' /tmp/apt_home
