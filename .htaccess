@@ -1,0 +1,16 @@
+Options -Indexes
+DirectoryIndex index.html
+RewriteEngine On
+RewriteCond %{HTTP_HOST} ^aptredlight\.com$ [NC,OR]
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP_HOST} ^(?:www\.)?aptredlight\.com$ [NC]
+RewriteRule ^ https://www.aptredlight.com%{REQUEST_URI} [R=301,L,NE]
+RewriteRule ^(?:aptredlight-next(?:/.*)?|home/?)$ / [R=301,L]
+RewriteRule (^|/)\.(?!well-known/) - [F,L]
+RewriteRule ^catalog\.html$ /#collection [R=301,L,NE,QSD]
+RewriteRule ^quality\-process\.html$ /#quality [R=301,L,NE,QSD]
+RewriteRule ^rfq\.html$ /#rfq-contact [R=301,L,NE,QSD]
+RewriteRule ^products/t300\-ultra\.html$ /products/t300.html [R=301,L,NE,QSD]
+RewriteRule ^products/a13\-pro\.html$ /products/a13.html [R=301,L,NE,QSD]
+RewriteRule ^products/mask\.html$ /products/smart-voice-mask.html [R=301,L,NE,QSD]
+RewriteRule ^products/mat\.html$ /products/light-mat.html [R=301,L,NE,QSD]

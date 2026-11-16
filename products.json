@@ -1,0 +1,202 @@
+[
+  {
+    "id": "t300",
+    "name": "T300 Multi-Wavelength Panel",
+    "category": "panels",
+    "tag": "EVERYDAY PANEL",
+    "image": "t3003.jpg",
+    "gallery": [
+      "t3003.jpg",
+      "t3004.jpg"
+    ],
+    "summary": "A versatile panel for your own dedicated light routine.",
+    "description": "Bring a structured light routine into your home with the T300 panel. Explore multi-wavelength configurations, a built-in screen and adjustable session controls. Choose your configuration with our team before ordering.",
+    "specs": {
+      "Format": "Freestanding or mounted panel",
+      "Collection": "T Series",
+      "Controls": "Screen, timer and brightness options",
+      "Configuration": "Multi-wavelength options; confirm selected version",
+      "Best fit": "A dedicated home wellness space"
+    },
+    "source": "https://www.aptredlight.com/?list_11/6.html"
+  },
+  {
+    "id": "t1260",
+    "name": "T1260 Pro Full-Body Panel",
+    "category": "panels",
+    "tag": "A BIGGER LIGHT EXPERIENCE",
+    "image": "t12603.png",
+    "gallery": [
+      "t12603.png",
+      "t12605.png"
+    ],
+    "summary": "Build a full-body light space around your routine.",
+    "description": "A larger panel format for dedicated wellness rooms and professional spaces. Discuss your room layout, mounting approach and preferred controls with APTREDLIGHT to specify the right setup. Stands and accessories are confirmed separately.",
+    "specs": {
+      "Format": "Large full-body panel",
+      "Collection": "T1260 Pro",
+      "Setup": "Stand and mounting options",
+      "Controls": "Model-specific screen and session settings",
+      "Best fit": "Dedicated home or professional space"
+    },
+    "source": "https://www.aptredlight.com/?list_11/23.html"
+  },
+  {
+    "id": "a13",
+    "name": "A13 Portable Panel",
+    "category": "portable",
+    "tag": "SMALL FORMAT. MORE FLEXIBILITY.",
+    "image": "a13.jpg",
+    "gallery": [
+      "a13.jpg"
+    ],
+    "summary": "A compact light companion for smaller spaces.",
+    "description": "Discover the A13 portable panel range from our Alibaba International collection. Its compact format offers an alternative to a larger fixed setup. Ask us to confirm the A13 or A13 Pro version, battery, accessories and current availability.",
+    "specs": {
+      "Format": "Portable compact panel",
+      "Collection": "A13 / A13 Pro options",
+      "Light options": "660 nm red + 850 nm near-infrared",
+      "Power": "Rechargeable options; confirm version",
+      "Best fit": "Compact personal setup"
+    },
+    "source": "https://germany.alibaba.com/product-detail/Factory-Handheld-Standing-Infrared-Red-Light_1601637411809.html"
+  },
+  {
+    "id": "full-body-wrap",
+    "name": "Full-Body Light Wrap",
+    "category": "body",
+    "tag": "YOUR MOMENT TO UNWIND",
+    "image": "wear.png",
+    "gallery": [
+      "wear.png"
+    ],
+    "summary": "A flexible format for your reclining routine.",
+    "description": "Explore a flexible alternative to a standing panel. This full-body wrap collection brings light into a reclining setup, with the controller, dimensions and LED layout selected for your chosen model.",
+    "specs": {
+      "Format": "Flexible full-body wrap",
+      "Collection": "Body light collection",
+      "Setup": "Reclining format",
+      "Controls": "External controller; varies by model",
+      "Best fit": "A comfortable dedicated routine"
+    },
+    "source": "https://www.aptredlight.com/?list_6/"
+  },
+  {
+    "id": "waist-wrap",
+    "name": "Targeted Waist Wrap",
+    "category": "targeted",
+    "tag": "LIGHT, WHERE YOU WANT IT",
+    "image": "belt6.png",
+    "gallery": [
+      "belt6.png"
+    ],
+    "summary": "A flexible wrap that fits around your everyday.",
+    "description": "A compact, flexible light format for targeted use. Explore the available wrap size, fastening design and controller options. Our team can help you choose a version and provide its usage instructions.",
+    "specs": {
+      "Format": "Flexible targeted wrap",
+      "Collection": "Wearable light collection",
+      "Setup": "Wrap-style placement",
+      "Controls": "External controller options",
+      "Best fit": "Targeted personal routine"
+    },
+    "source": "https://www.aptredlight.com/?list_6/"
+  },
+  {
+    "id": "light-mat",
+    "name": "Red Light Wellness Mat",
+    "category": "body",
+    "tag": "MAKE TIME FOR YOURSELF",
+    "image": "belt7.png",
+    "gallery": [
+      "belt7.png"
+    ],
+    "summary": "Make your relaxation space a light-filled space.",
+    "description": "A flat, flexible light mat for a reclining setup at home. Compare available sizes and controller options with our team. Product photography shows a lifestyle setting; follow the instructions supplied with your chosen device.",
+    "specs": {
+      "Format": "Flexible flat mat",
+      "Collection": "Body light collection",
+      "Setup": "Reclining format",
+      "Controls": "Model-specific controller",
+      "Best fit": "Home wellness space"
+    },
+    "source": "https://www.aptredlight.com/?list_6/"
+  },
+  {
+    "id": "3050-ultra",
+    "name": "3050 ULTRA 3-in-1 Red Light Therapy Blanket",
+    "category": "body",
+    "tag": "FEATURED \u00b7 3-IN-1",
+    "image": "3050-ultra-main.png",
+    "gallery": [
+      "3050-ultra-main.png",
+      "3050-ultra-mat.jpg",
+      "3050-ultra-detail.jpg"
+    ],
+    "summary": "Mat. Bag. Mat + Hood. A modular full-body platform for your brand.",
+    "description": "Explore the BAG PRO ULTRA 3050 platform with APTREDLIGHT. Confirm the selected configuration, accessories and technical documentation before sampling.",
+    "specs": {
+      "Format": "3-in-1 full-body light bag platform",
+      "Collection": "BAG PRO ULTRA 3050",
+      "Controls": "Confirm model-specific controller",
+      "Best fit": "Private-label full-body wellness collections"
+    },
+    "source": "https://www.alibaba.com/product-detail/APTREDLIGHT-Wholesale-Red-Light-Therapy-Sleeping_1601859372599.html"
+  },
+  {
+    "id": "smart-voice-mask",
+    "name": "Smart AI Voice Red Light Therapy Mask",
+    "category": "masks",
+    "tag": "MASK \u00b7 VOICE CONTROL",
+    "image": "smart-voice-mask.png",
+    "gallery": [
+      "smart-voice-mask.png"
+    ],
+    "summary": "Explore a voice-control mask platform for your beauty and wellness brand.",
+    "description": "Discuss voice-control requirements, branding and packaging with APTREDLIGHT. Confirm the exact model specifications before sampling.",
+    "specs": {
+      "Format": "Face mask",
+      "Collection": "MASK collection",
+      "Controls": "Voice-control platform; confirm commands and languages",
+      "Best fit": "Beauty and wellness brand projects"
+    },
+    "source": "https://www.alibaba.com/product-detail/Newest-Voice-Wake-up-Light-Therapy_1601822747982.html"
+  },
+  {
+    "id": "red-light-therapy-bed",
+    "name": "Red Light Therapy Bed",
+    "category": "beds",
+    "tag": "FULL-BODY \u00b7 BED COLLECTION",
+    "image": "red-light-therapy-bed.png",
+    "gallery": [
+      "red-light-therapy-bed.png"
+    ],
+    "summary": "A full-body bed platform for dedicated wellness spaces.",
+    "description": "Explore the APTREDLIGHT Red Light Therapy Bed shown in our product artwork. Discuss room layout, adjustable settings, controls and OEM/ODM requirements with our team. Confirm the exact configuration and technical documentation before ordering.",
+    "specs": {
+      "Format": "Full-body light therapy bed",
+      "Collection": "Red Light Therapy Bed",
+      "Controls": "Discuss adjustable settings and controller options",
+      "Best fit": "Dedicated wellness spaces and OEM/ODM projects"
+    },
+    "source": "https://www.alibaba.com/product-detail/Professional-LED-Light-Therapy-Bed-480_1601964719116.html"
+  },
+  {
+    "id": "red-light-therapy-cap",
+    "name": "Red Light Therapy Cap",
+    "category": "caps",
+    "tag": "WEARABLE \u00b7 CAP COLLECTION",
+    "image": "red-light-therapy-cap.png",
+    "gallery": [
+      "red-light-therapy-cap.png"
+    ],
+    "summary": "A wearable cap platform for your light wellness collection.",
+    "description": "Explore the APTREDLIGHT Red Light Therapy Cap shown in our product artwork. Discuss fit, materials, light configuration, controls and private-label packaging with our team. Confirm the exact model specifications and included accessories before ordering.",
+    "specs": {
+      "Format": "Wearable light therapy cap",
+      "Collection": "Red Light Therapy Cap",
+      "Configuration": "Discuss fit, light configuration and controls",
+      "Best fit": "Private-label wearable wellness collections"
+    },
+    "source": "https://www.alibaba.com/product-detail/Red-Light-Therapy-Hat-Infrared-Light_1601588118791.html"
+  }
+]
