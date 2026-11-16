@@ -1,0 +1,44 @@
+name: Sync Sites release to production
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.openai/site-release.json'
+      - 'tools/sync_sites_release.py'
+      - '.github/workflows/sync-sites-production.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: aptredlight-production-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download and verify the pinned Sites release
+        run: python3 tools/sync_sites_release.py "$RUNNER_TEMP/aptredlight-release"
+      - name: Publish verified website files to production branch
+        env:
+          RELEASE_PATH: ${{ runner.temp }}/aptredlight-release
+        run: |
+          git config user.name "APTREDLIGHT Release Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git show-ref --verify --quiet refs/remotes/origin/production; then
+            git switch --force-create production origin/production
+          else
+            git switch --orphan production
+          fi
+          git rm -rf --ignore-unmatch .
+          cp -a "$RELEASE_PATH/." .
+          git add --all
+          if git diff --cached --quiet; then
+            echo "Production already matches this release."
+          else
+            git commit -m "Publish pinned APTREDLIGHT Sites release"
+            git push origin production
+          fi
