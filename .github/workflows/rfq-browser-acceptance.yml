@@ -1,0 +1,30 @@
+name: RFQ mobile browser acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/test_rfq.mjs'
+      - '.github/workflows/rfq-browser-acceptance.yml'
+  workflow_dispatch:
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Chromium acceptance test runtime
+        run: |
+          npm install --no-save playwright@1.57.0
+          npx playwright install --with-deps chromium
+      - name: Verify public RFQ, PDF, mobile CTA and WhatsApp handoff
+        run: node tools/test_rfq.mjs
+      - name: Upload mobile QA screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aptredlight-mobile-rfq-qa
+          path: artifacts/
+          if-no-files-found: ignore
