@@ -5,3 +5,6 @@
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.intl-card img{transition:none}}
 
 .intl-hero-content{width:100%;min-width:0;overflow-wrap:anywhere;hyphens:auto}.intl-split>*{min-width:0}.international-home h1,.international-home h2,.international-home h3{overflow-wrap:anywhere;hyphens:auto}
+
+/* Product library resource navigation */
+.library-resource-links{display:flex;flex-wrap:wrap;gap:12px 24px;width:100%;grid-column:1/-1;margin-top:24px;padding-top:18px;border-top:1px solid #7775}.library-resource-links a{text-decoration:underline;text-underline-offset:4px}.library-context-link{max-width:1120px;margin:36px auto;padding:24px;background:#f6f2ee;border:1px solid #e2ddd6;border-radius:12px}.library-context-link a{color:#b52a24;text-decoration:underline}@media(max-width:600px){.library-context-link{margin:24px 16px;padding:20px}.library-resource-links{gap:14px}}
