@@ -1,0 +1,14 @@
+/* Manufacturer-first homepage; confirmed sourcing scope, responsive evidence links. */
+.factory-hero.hero-entity-upgrade{min-height:0}
+.factory-hero.hero-entity-upgrade .hero-inner{padding:68px 5% 66px}
+.factory-hero.hero-entity-upgrade .hero-inner h1{max-width:900px;font-size:clamp(40px,3.65vw,55px)!important;line-height:1.08!important;letter-spacing:-.035em!important;margin-bottom:22px!important;text-wrap:balance}
+.factory-hero.hero-entity-upgrade .hero-inner>.eyebrow{max-width:920px;font-size:11px;line-height:1.9;letter-spacing:.13em}
+.factory-hero.hero-entity-upgrade .intro{max-width:740px;font-size:16px;line-height:1.7}
+.hero-capabilities{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;max-width:1020px;margin:25px 0 0;padding:0;list-style:none}
+.hero-capabilities li{min-width:0;padding:18px;background:#17232df2;border:1px solid #82919a66;border-radius:5px}
+.hero-capabilities strong{display:block;color:#fff;font-size:14px;line-height:1.45;font-weight:650}
+.hero-capabilities span{display:block;margin-top:8px;color:#d0d9df;font-size:12px;line-height:1.65}
+@media(max-width:1000px){.factory-hero.hero-entity-upgrade .hero-inner h1{max-width:760px;font-size:clamp(38px,4.6vw,48px)!important}.hero-capabilities{grid-template-columns:repeat(2,minmax(0,1fr));max-width:760px}}
+@media(max-width:760px){.factory-hero.hero-entity-upgrade .hero-inner{padding:54px 6% 62px}.factory-hero.hero-entity-upgrade .hero-inner>.eyebrow{font-size:10px;letter-spacing:.08em}.factory-hero.hero-entity-upgrade .intro{font-size:14px}}
+@media(max-width:480px){.factory-hero.hero-entity-upgrade .hero-inner{padding:42px 6% 56px}.factory-hero.hero-entity-upgrade .hero-inner h1{font-size:clamp(30px,8.1vw,35px)!important;line-height:1.1!important}.hero-capabilities{gap:9px}.hero-capabilities li{padding:13px}.hero-capabilities strong{font-size:12px}.hero-capabilities span{font-size:11px;line-height:1.7}.factory-hero.hero-entity-upgrade .hero-caption{font-size:9px}}
+@media(max-width:340px){.hero-capabilities{grid-template-columns:1fr}}
