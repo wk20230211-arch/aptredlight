@@ -7,6 +7,7 @@ on:
       - 'tools/sync_sites_release.py'
       - 'tools/build_hostinger_manifest.py'
       - 'tools/hostinger_deploy.py'
+      - 'tools/verify_hostinger_identity.py'
       - '.hostinger/deploy.json'
       - '.github/workflows/hostinger-deploy.yml'
       - '.github/workflows/sync-sites-production.yml'

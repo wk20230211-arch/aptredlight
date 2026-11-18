@@ -9,6 +9,8 @@ on:
       - 'tools/hostinger_deploy.py'
       - 'tools/test_hostinger_deploy.py'
       - 'tools/build_hostinger_manifest.py'
+      - 'tools/verify_hostinger_identity.py'
+      - 'tools/test_hostinger_identity.py'
   pull_request:
     branches: [main]
     paths:
@@ -17,6 +19,8 @@ on:
       - 'tools/hostinger_deploy.py'
       - 'tools/test_hostinger_deploy.py'
       - 'tools/build_hostinger_manifest.py'
+      - 'tools/verify_hostinger_identity.py'
+      - 'tools/test_hostinger_identity.py'
   workflow_run:
     workflows: ['Sync Sites release to production']
     types: [completed]
@@ -45,9 +49,11 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - name: Test release admission, overlay preservation and rollback
-        run: python3 tools/test_hostinger_deploy.py
+        run: |
+          python3 tools/test_hostinger_deploy.py
+          python3 tools/test_hostinger_identity.py
       - name: Check automation syntax
-        run: python3 -m py_compile tools/hostinger_deploy.py tools/build_hostinger_manifest.py
+        run: python3 -m py_compile tools/hostinger_deploy.py tools/build_hostinger_manifest.py tools/verify_hostinger_identity.py
 
   deploy:
     needs: validate-automation
@@ -94,47 +100,52 @@ jobs:
           --release "$RUNNER_TEMP/hostinger-release"
           --pointer .openai/site-release.json
           --receipt "$RUNNER_TEMP/hostinger-validation-receipt.json"
-      - name: Check one-time deployment binding
+      - name: Resolve the confirmed Hostinger SSH target
         env:
           HOSTINGER_SSH_HOST: ${{ vars.HOSTINGER_SSH_HOST }}
           HOSTINGER_SSH_PORT: ${{ vars.HOSTINGER_SSH_PORT }}
-          HAS_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY != '' }}
-          HAS_KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS != '' }}
         run: |
-          python3 - <<'PY'
-          import datetime,json,os,pathlib,re,sys
+          python3 - <<'PYCODE'
+          import json,os,pathlib,re
           config=json.loads(pathlib.Path('.hostinger/deploy.json').read_text())
           pointer=json.loads(pathlib.Path('.openai/site-release.json').read_text())
           assert config['domain']=='aptredlight.com' and config['canonical_origin']=='https://www.aptredlight.com'
           assert config['project_id']==pointer['project_id']=='appgprj_6addb8c872b081918d711d7bc0c5cbf4'
-          missing=[]
-          if not os.environ.get('HOSTINGER_SSH_HOST','').strip():missing.append('variable HOSTINGER_SSH_HOST')
-          if os.environ.get('HAS_SSH_PRIVATE_KEY')!='true':missing.append('secret HOSTINGER_SSH_PRIVATE_KEY')
-          if os.environ.get('HAS_KNOWN_HOSTS')!='true':missing.append('secret HOSTINGER_KNOWN_HOSTS')
-          if missing:
-              receipt={'status':'needs_setup','deployed':False,'sites_version':pointer['sites_version'],'source_commit':pointer['source_commit'],'missing':missing,'checked_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
-              pathlib.Path(os.environ['RUNNER_TEMP'],'hostinger-deployment-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
-              print('::error::One-time Hostinger deployment binding is incomplete. See docs/hostinger-auto-deploy.zh-CN.md. Missing: '+', '.join(missing))
-              sys.exit(1)
-          host=os.environ['HOSTINGER_SSH_HOST'].strip()
+          host=(os.environ.get('HOSTINGER_SSH_HOST') or config['ssh_host']).strip()
           port=int(os.environ.get('HOSTINGER_SSH_PORT') or config['ssh_port'])
-          user=config['ssh_user']
-          web_root=config['web_root']
+          user=config['ssh_user'];web_root=config['web_root']
           assert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]*',host),'Invalid SSH host'
-          assert 1<=port<=65535,'Invalid SSH port'
-          assert user=='u469397229','Unexpected Hostinger hosting user'
+          assert 1<=port<=65535 and user=='u469397229','Unexpected SSH port or user'
           assert web_root==f'/home/{user}/domains/aptredlight.com/public_html','Unexpected website root'
           with open(os.environ['GITHUB_ENV'],'a') as out:
               for key,value in [('DEPLOY_HOST',host),('DEPLOY_PORT',str(port)),('DEPLOY_USER',user),('DEPLOY_WEB_ROOT',web_root)]:out.write(key+'='+value+'\n')
-          PY
-      - name: Load the deployment key and pinned SSH host identity
-        env:
-          HOSTINGER_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
-          HOSTINGER_KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+          PYCODE
+      - name: Verify the SSH server against the fingerprint supplied in hPanel
         run: |
           set -euo pipefail
           umask 077
-          printf '%s\n' "$HOSTINGER_KNOWN_HOSTS" > "$RUNNER_TEMP/hostinger-known-hosts"
+          ssh-keyscan -T 10 -p "$DEPLOY_PORT" -t ed25519 "$DEPLOY_HOST" > "$RUNNER_TEMP/hostinger-known-hosts"
+          ssh-keygen -lf "$RUNNER_TEMP/hostinger-known-hosts" -E sha256
+          python3 tools/verify_hostinger_identity.py --config .hostinger/deploy.json --known-hosts "$RUNNER_TEMP/hostinger-known-hosts" --host "$DEPLOY_HOST" --port "$DEPLOY_PORT" --receipt "$RUNNER_TEMP/hostinger-identity-receipt.json"
+      - name: Check the one-time deployment private key binding
+        env:
+          HAS_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY != '' }}
+        run: |
+          python3 - <<'PYCODE'
+          import datetime,json,os,pathlib,sys
+          pointer=json.loads(pathlib.Path('.openai/site-release.json').read_text())
+          if os.environ.get('HAS_SSH_PRIVATE_KEY')!='true':
+              receipt={'status':'needs_setup','deployed':False,'host_identity_verified':True,'sites_version':pointer['sites_version'],'source_commit':pointer['source_commit'],'missing':['secret HOSTINGER_SSH_PRIVATE_KEY'],'checked_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+              pathlib.Path(os.environ['RUNNER_TEMP'],'hostinger-deployment-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
+              print('::error::Server identity verified. Add the matching deployment private key as GitHub secret HOSTINGER_SSH_PRIVATE_KEY; authorize its public key in Hostinger. See docs/hostinger-auto-deploy.zh-CN.md.')
+              sys.exit(1)
+          PYCODE
+      - name: Load the deployment key and pinned SSH host identity
+        env:
+          HOSTINGER_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
           eval "$(ssh-agent -s)" > /dev/null
           printf '%s\n' "$HOSTINGER_SSH_PRIVATE_KEY" | ssh-add - > /dev/null
           printf 'SSH_AUTH_SOCK=%s\nSSH_AGENT_PID=%s\n' "$SSH_AUTH_SOCK" "$SSH_AGENT_PID" >> "$GITHUB_ENV"
@@ -156,6 +167,7 @@ jobs:
           name: hostinger-deployment-receipts
           path: |
             ${{ runner.temp }}/hostinger-validation-receipt.json
+            ${{ runner.temp }}/hostinger-identity-receipt.json
             ${{ runner.temp }}/hostinger-deployment-receipt.json
           if-no-files-found: warn
           retention-days: 30

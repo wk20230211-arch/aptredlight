@@ -5,5 +5,7 @@
   "canonical_origin": "https://www.aptredlight.com",
   "ssh_user": "u469397229",
   "ssh_port": 65002,
-  "web_root": "/home/u469397229/domains/aptredlight.com/public_html"
+  "web_root": "/home/u469397229/domains/aptredlight.com/public_html",
+  "ssh_host": "45.87.81.210",
+  "ssh_host_key_sha256": "SHA256:4mfb2c67Lhi/idZu+pyYocKONELisV4IInwlFdR8t98"
 }
