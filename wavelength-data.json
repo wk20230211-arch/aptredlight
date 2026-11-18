@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.0",
+  "domain_nm": {
+    "min": 400,
+    "max": 1100
+  },
+  "default_nm": 660,
+  "profile_kind": "illustrative_nominal_wavelength",
+  "option_scope_note": "1060 nm, 1064 nm and 1072 nm are distinct nominal wavelength options, not interchangeable labels or verified outputs of any product.",
+  "wavelengths": [
+    {
+      "nm": 415,
+      "family": "Blue light",
+      "color": "#5792ff",
+      "title": "Visible blue spectrum",
+      "research_context": "Studied in selected acne-focused light devices. This is not a general skin-treatment claim or a confirmed capability of every product.",
+      "use_considerations": "Use only a device intended for the application, with its specified eye protection and exposure instructions.",
+      "oem_considerations": "Discuss a dedicated beauty platform and its optical safety requirements."
+    },
+    {
+      "nm": 480,
+      "family": "Blue light",
+      "color": "#38b8f2",
+      "title": "480 nm blue-light development option",
+      "research_context": "A visible blue wavelength requested for custom product development. Define the intended application and evaluate supporting evidence for the exact device before making benefit claims.",
+      "use_considerations": "Use only the confirmed model’s instructions for exposure, distance and eye protection. A 415 nm protocol must not be assumed to apply to 480 nm.",
+      "oem_considerations": "Confirm 480 nm LED availability, spectral tolerance, optical safety and channel control with our engineering team."
+    },
+    {
+      "nm": 590,
+      "family": "Amber light",
+      "color": "#ffbe57",
+      "title": "Visible amber spectrum",
+      "research_context": "An exploratory option for beauty-focused product development. Evidence and intended claims need application-specific review.",
+      "use_considerations": "Do not infer a treatment time or outcome from color alone. Obtain the exact model’s validated instructions.",
+      "oem_considerations": "Confirm LED sourcing, spectral tolerance and intended-use evidence before sampling."
+    },
+    {
+      "nm": 630,
+      "family": "Red light",
+      "color": "#ff694f",
+      "title": "Visible red spectrum",
+      "research_context": "Red-light research includes skin appearance and photobiomodulation. Effects cannot be attributed to wavelength alone.",
+      "use_considerations": "For skin-oriented devices, follow model-specific distance, duration and eye-protection instructions.",
+      "oem_considerations": "Discuss surface coverage, spectral distribution and controls for a skin-focused platform."
+    },
+    {
+      "nm": 660,
+      "family": "Red light",
+      "color": "#f04448",
+      "title": "A versatile red-light starting point",
+      "research_context": "Commonly explored in red-light PBM research and red / near-infrared product combinations. It is not a guarantee of skin or recovery outcomes.",
+      "use_considerations": "Choose the product format first, then follow its documented distance, timer and intensity settings.",
+      "oem_considerations": "Ask about combining visible red with NIR and verifying output for each channel."
+    },
+    {
+      "nm": 670,
+      "family": "Red light",
+      "color": "#df343c",
+      "title": "670 nm visible red-light option",
+      "research_context": "An additional visible red wavelength for your custom development brief. Intended applications and benefit claims must be evaluated for the exact product and configuration.",
+      "use_considerations": "Follow the confirmed model’s instructions for distance, exposure time and eye protection. Do not substitute a protocol from another wavelength or device.",
+      "oem_considerations": "Review 670 nm LED availability, spectral tolerance, channel ratios and measured output with engineering."
+    },
+    {
+      "nm": 810,
+      "family": "Near-infrared",
+      "color": "#cc7597",
+      "title": "Near-infrared research spectrum",
+      "research_context": "Frequently used in PBM research. Application, target tissue and study parameters must be evaluated together.",
+      "use_considerations": "Invisible light is not an indicator of low output. Follow the device manual and specified eye protection.",
+      "oem_considerations": "Discuss independent channels, optical measurement and the intended-use evidence package."
+    },
+    {
+      "nm": 830,
+      "family": "Near-infrared",
+      "color": "#ad82c5",
+      "title": "Near-infrared configuration option",
+      "research_context": "Explored in PBM studies, including skin-related applications. Study findings are specific to the device and protocol.",
+      "use_considerations": "Confirm the selected model’s intended use and settings. Do not transfer a protocol from another device.",
+      "oem_considerations": "Review wavelength availability, channel balance and surface irradiance with engineering."
+    },
+    {
+      "nm": 850,
+      "family": "Near-infrared",
+      "color": "#9284d4",
+      "title": "A red + NIR development pairing",
+      "research_context": "A common NIR wavelength in PBM devices and research. It does not imply a fixed penetration depth or guaranteed muscle or joint effect.",
+      "use_considerations": "Use the confirmed model instructions for distance and duration; visible brightness cannot measure NIR intensity.",
+      "oem_considerations": "Review red / NIR ratios, independent control options and measured output at specified distances."
+    },
+    {
+      "nm": 940,
+      "family": "Near-Infrared",
+      "color": "#8c92c8",
+      "title": "940 nm near-infrared option",
+      "research_context": "An additional near-infrared option for an OEM/ODM development brief. Suitability and any performance claims require review of the intended application and exact device.",
+      "use_considerations": "Follow model-specific instructions. Confirm measured output, exposure settings and thermal performance before defining a use routine.",
+      "oem_considerations": "Review 940 nm component availability, wavelength balance, independent controls and thermal testing."
+    },
+    {
+      "nm": 1060,
+      "family": "Near-infrared",
+      "color": "#a18fbb",
+      "title": "1060 nm model-specific option",
+      "research_context": "An additional near-infrared option listed for selected APTREDLIGHT panels. Confirm the precise configuration and intended use for your model.",
+      "use_considerations": "Use the selected device instructions; confirm optical output, controls and thermal performance.",
+      "oem_considerations": "Request the LED count, measured spectrum and available channel control for the quoted version."
+    },
+    {
+      "nm": 1064,
+      "family": "Near-Infrared",
+      "color": "#969fce",
+      "title": "1064 nm specialist NIR option",
+      "research_context": "A specialist wavelength request for custom development. LED and laser systems are different technologies; wavelength alone does not make their applications or results interchangeable.",
+      "use_considerations": "A use protocol must be defined for the confirmed light source and device, including its optical safety assessment and instructions.",
+      "oem_considerations": "Specify LED or laser at the briefing stage; confirm feasibility, optical design, controls and thermal requirements before sampling."
+    },
+    {
+      "nm": 1072,
+      "family": "Near-infrared",
+      "color": "#a1a5da",
+      "title": "Specialist development request",
+      "research_context": "Longer NIR wavelengths are a specialist research area. Clinical performance cannot be inferred from wavelength or penetration claims.",
+      "use_considerations": "A specialist concept requires a device-specific safety and intended-use assessment before a use protocol is defined.",
+      "oem_considerations": "Confirm feasibility, component supply, thermal design and evidence before selecting this option."
+    }
+  ]
+}

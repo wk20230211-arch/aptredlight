@@ -1,0 +1,42 @@
+/* Nominal-wavelength navigation, not laboratory measurement data. */
+#wavelengths{--wave:#f04448;scroll-margin-top:100px}
+#wavelengths .wave-tabs{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+#wavelengths .wave-tabs button{min-width:0;min-height:82px;padding:12px 6px;transition:border-color 160ms ease,background-color 160ms ease,box-shadow 160ms ease}
+#wavelengths .wave-tabs button i{flex-shrink:0;margin:0 0 4px;width:28px;height:5px;background:var(--option-color)}
+#wavelengths .wave-tabs button strong{font-size:14px;line-height:1.3}
+#wavelengths .wave-tabs button span{font-size:11px;line-height:1.35}
+#wavelengths .wave-tabs button[aria-pressed=true]{border:2px solid #d84d40;padding:11px 5px;background:#fff3f0;box-shadow:0 0 0 2px #d84d4014}
+#wavelengths .wave-tabs button:focus-visible{outline:3px solid #2563eb;outline-offset:3px}
+#wavelengths .spectrum-layout>*{min-width:0}
+#wavelengths .spectrum-visual{--wave:inherit;display:flex;flex-direction:column;background-color:#14212b;background-image:radial-gradient(ellipse at 50% 32%,color-mix(in srgb,var(--wave) 18%,transparent),transparent 72%)}
+#wavelengths .visual-top{gap:18px;flex-wrap:wrap}
+#wavelengths .visual-top>span{font-size:10px;line-height:1.6;color:#d4dee6}
+#wavelengths .visual-top>span small{display:block;font-size:9px;letter-spacing:.08em;color:#aebfcd}
+#wavelengths .visual-top>strong{font-variant-numeric:tabular-nums}
+#wavelengths .spectral-plot{position:relative;flex:1;min-height:225px;display:flex;align-items:center;margin:20px 0 6px}
+#wavelengths .spectral-plot svg{display:block;width:100%;height:auto;overflow:visible}
+#wavelengths .spectral-grid{stroke:#ffffff14;stroke-width:1}
+#wavelengths .spectral-axis{stroke:#b3c7d578;stroke-width:1}
+#wavelengths .spectral-label{fill:#c0cfda;font:20px Arial,sans-serif}
+#wavelengths #spectrum-curve{stroke:var(--wave);stroke-width:3;fill:none;vector-effect:non-scaling-stroke}
+#wavelengths #spectrum-guide{stroke:var(--wave);stroke-width:1;stroke-dasharray:4 5}
+#wavelengths #spectrum-peak{fill:var(--wave);stroke:#fff;stroke-width:2}
+#wavelengths #spectrum-peak-label{fill:#f3f7fa;font:bold 24px Arial,sans-serif}
+#wavelengths .spectrum-scale{position:relative;display:block;height:16px;margin:8px 0;font-size:9px}
+#wavelengths .spectrum-scale span:first-child{position:absolute;left:0}
+#wavelengths .spectrum-scale span:last-child{position:absolute;left:42.857%;padding-left:12px;border-left:1px solid #a7bdca66}
+#wavelengths .spectrum-line{margin:10px 0 0;background:linear-gradient(90deg,#8062ed 0%,#4193dc 12%,#66b784 22%,#efc45e 29%,#ec6c4f 35%,#b32d43 42.857%,#91749c 42.858%,#7f8ca7 100%)}
+#wavelengths #spectrum-marker{transform:translateX(-50%);transition:left 220ms ease;box-shadow:0 0 0 3px #ffffff30}
+#wavelengths .scale-numbers{display:block;position:relative;height:20px;margin-top:11px;font-size:10px}
+#wavelengths .scale-numbers span{position:absolute;top:0}
+#wavelengths .scale-numbers span:first-child{left:0}
+#wavelengths .scale-numbers span:nth-child(2){left:42.857%;transform:translateX(-50%)}
+#wavelengths .scale-numbers span:last-child{right:0}
+#wavelengths .visual-note{font-size:11px!important;color:#d1dce4!important}
+#wavelengths .wave-content{align-self:start}
+#wavelengths .wave-content .eyebrow{color:#b33c32}
+#wavelengths .wave-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+@media(max-width:1100px){#wavelengths .wave-tabs{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media(max-width:760px){#wavelengths .wave-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}#wavelengths .spectrum-layout{grid-template-columns:1fr}#wavelengths .spectrum-visual{min-height:390px}#wavelengths .spectral-plot{min-height:190px}}
+@media(max-width:480px){#wavelengths .wave-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}#wavelengths .wave-tabs button{min-height:78px}#wavelengths .wave-tabs button span{font-size:11px}#wavelengths .spectrum-visual{padding:22px 18px}#wavelengths .visual-top>strong{font-size:34px}#wavelengths .spectral-label{font-size:26px}#wavelengths #spectrum-peak-label{font-size:28px}}
+@media(prefers-reduced-motion:reduce){#wavelengths .wave-tabs button,#wavelengths #spectrum-marker{transition:none}}

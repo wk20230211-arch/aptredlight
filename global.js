@@ -1,5 +1,83 @@
 (()=>{
- document.querySelectorAll('[data-language-switch]').forEach(s=>s.addEventListener('change',()=>{const u=new URL(s.value,location.origin);if(u.origin===location.origin)location.assign(u.pathname+u.search+u.hash)}));
+ // Keep authored language routes: untranslated pages intentionally lead to a locale home.
+ const languageStates=[];
+ const languageHover=window.matchMedia('(min-width: 981px) and (hover: hover) and (pointer: fine)');
+ function languageRoute(value){
+  let target;try{target=new URL(value,location.origin)}catch{return null}
+  if(target.origin!==location.origin||!['http:','https:'].includes(target.protocol))return null;
+  if(!target.search)target.search=location.search;
+  if(!target.hash)target.hash=location.hash;
+  // Localized home pages use #products for the collection, rather than #collection.
+  if(/^\/(de|fr|es|zh-CN)\/$/.test(target.pathname)&&target.hash==='#collection')target.hash='#products';
+  return target.pathname+target.search+target.hash;
+ }
+ function refreshLanguageLinks(state){state.routes.forEach(({link,value})=>{const href=languageRoute(value);if(href)link.setAttribute('href',href)})}
+ function prepareLanguageOpen(state){
+  languageStates.forEach(other=>{if(other!==state)setLanguageOpen(other,false)});
+  document.querySelectorAll('.journal-header details').forEach(group=>{group.open=false;group.querySelector('summary')?.setAttribute('aria-expanded','false')});
+  refreshLanguageLinks(state);
+ }
+ function setLanguageOpen(state,open){
+  clearTimeout(state.timer);if(open)prepareLanguageOpen(state);
+  state.details.open=open;state.summary.setAttribute('aria-expanded',String(open));
+ }
+ document.querySelectorAll('[data-language-switch]').forEach((select,index)=>{
+  select.addEventListener('change',()=>{const href=languageRoute(select.value);if(href)location.assign(href)});
+  if(!select.closest('.global-bar')||select.dataset.languageEnhanced)return;
+  const options=[...select.options].filter(option=>!option.disabled&&languageRoute(option.value));
+  if(options.length<2)return;
+  const selected=options.find(option=>option.selected)||options[0];
+  const name=selected.label||selected.textContent;
+  const label=select.getAttribute('aria-label')||'Choose website language';
+  const details=document.createElement('details');details.className='language-menu';
+  const summary=document.createElement('summary');summary.setAttribute('aria-label',label+': '+name);summary.setAttribute('aria-expanded','false');
+  const symbol=document.createElement('span');symbol.setAttribute('aria-hidden','true');symbol.textContent='◎';
+  const current=document.createElement('span');current.textContent=name;summary.append(symbol,current);
+  const panel=document.createElement('nav');panel.className='language-menu-panel';panel.id='apt-language-options-'+(index+1);panel.setAttribute('aria-label',label);summary.setAttribute('aria-controls',panel.id);
+  const state={details,summary,panel,routes:[],hovered:false,timer:null};
+  options.forEach(option=>{
+   const link=document.createElement('a');link.textContent=option.label||option.textContent;
+   const lang=option.getAttribute('lang');if(lang){link.setAttribute('lang',lang);link.setAttribute('hreflang',lang)}
+   if(option===selected)link.setAttribute('aria-current','true');
+   state.routes.push({link,value:option.value});
+   link.addEventListener('click',()=>{refreshLanguageLinks(state);setLanguageOpen(state,false)});
+   panel.append(link);
+  });
+  details.append(summary,panel);refreshLanguageLinks(state);
+  const fallback=select.closest('label')||select;fallback.after(details);fallback.classList.add('language-select-fallback');fallback.hidden=true;select.dataset.languageEnhanced='true';
+  languageStates.push(state);
+  // Prepare native activation before its default action. Queued toggle events only
+  // reflect state, so an old language toggle cannot reopen over a newer nav intent.
+  summary.addEventListener('click',()=>{if(!details.open)prepareLanguageOpen(state)});
+  details.addEventListener('toggle',()=>summary.setAttribute('aria-expanded',String(details.open)));
+  details.addEventListener('pointerenter',event=>{
+   if(!languageHover.matches||event.pointerType==='touch')return;
+   state.hovered=true;setLanguageOpen(state,true);
+  });
+  details.addEventListener('pointerleave',()=>{
+   state.hovered=false;clearTimeout(state.timer);if(!languageHover.matches)return;
+   state.timer=setTimeout(()=>{if(!state.hovered&&!details.contains(document.activeElement))setLanguageOpen(state,false)},160);
+  });
+  details.addEventListener('focusout',()=>{
+   clearTimeout(state.timer);state.timer=setTimeout(()=>{if(!state.hovered&&!details.contains(document.activeElement))setLanguageOpen(state,false)},0);
+  });
+  details.addEventListener('keydown',event=>{
+   if(event.key==='Escape'&&details.open){event.preventDefault();event.stopPropagation();setLanguageOpen(state,false);summary.focus();return}
+   const keys=['ArrowDown','ArrowUp','Home','End'];if(!keys.includes(event.key))return;
+   const links=state.routes.map(route=>route.link),at=links.indexOf(document.activeElement);
+   if(document.activeElement!==summary&&at===-1)return;
+   event.preventDefault();setLanguageOpen(state,true);
+   const next=event.key==='Home'?0:event.key==='End'?links.length-1:event.key==='ArrowDown'?(at+1)%links.length:at<0?links.length-1:(at-1+links.length)%links.length;
+   links[next].focus();
+  });
+ });
+ if(languageStates.length){
+  document.querySelectorAll('.journal-header details').forEach(group=>group.addEventListener('toggle',()=>{if(group.open)languageStates.forEach(state=>setLanguageOpen(state,false))}));
+  document.addEventListener('click',event=>languageStates.forEach(state=>{if(!state.details.contains(event.target))setLanguageOpen(state,false)}));
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'){const state=languageStates.find(item=>item.details.open);if(state){event.preventDefault();setLanguageOpen(state,false);state.summary.focus()}}});
+  languageHover.addEventListener('change',()=>languageStates.forEach(state=>{state.hovered=false;setLanguageOpen(state,false)}));
+  ['hashchange','popstate'].forEach(type=>window.addEventListener(type,()=>languageStates.forEach(refreshLanguageLinks)));
+ }
  const root=document.querySelector('[data-localized-site]');if(!root)return;
  const labels=JSON.parse(document.getElementById('locale-ui').textContent),form=document.getElementById('intl-inquiry'),cards=[...document.querySelectorAll('.intl-card')];
  let category='all';const search=document.getElementById('intl-search');
