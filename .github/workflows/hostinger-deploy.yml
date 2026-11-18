@@ -66,6 +66,34 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+      - name: Verify the triggering release run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,os,re,urllib.request
+          run_id=os.environ['SOURCE_RUN_ID'];assert re.fullmatch(r'[0-9]+',run_id),'Invalid release run ID'
+          repo=os.environ['GITHUB_REPOSITORY']
+          req=urllib.request.Request(f'https://api.github.com/repos/{repo}/actions/runs/{run_id}',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','User-Agent':'APTREDLIGHT-Deployment'})
+          with urllib.request.urlopen(req,timeout=30) as response:run=json.load(response)
+          assert run['name']=='Sync Sites release to production' and run['path']=='.github/workflows/sync-sites-production.yml'
+          assert run['conclusion']=='success' and run['head_branch']=='main'
+          assert run['repository']['full_name']==repo and run['head_repository']['full_name']==repo
+          assert run['event'] in ['push','workflow_dispatch']
+          PY
+      - name: Download the exact verified release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hostinger-static-release
+          path: ${{ runner.temp }}/hostinger-release
+          github-token: ${{ github.token }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+      - name: Admit only the currently pinned release
+        run: >-
+          python3 tools/hostinger_deploy.py validate
+          --release "$RUNNER_TEMP/hostinger-release"
+          --pointer .openai/site-release.json
+          --receipt "$RUNNER_TEMP/hostinger-validation-receipt.json"
       - name: Check one-time deployment binding
         env:
           HOSTINGER_SSH_HOST: ${{ vars.HOSTINGER_SSH_HOST }}
@@ -99,34 +127,6 @@ jobs:
           with open(os.environ['GITHUB_ENV'],'a') as out:
               for key,value in [('DEPLOY_HOST',host),('DEPLOY_PORT',str(port)),('DEPLOY_USER',user),('DEPLOY_WEB_ROOT',web_root)]:out.write(key+'='+value+'\n')
           PY
-      - name: Verify the triggering release run
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 - <<'PY'
-          import json,os,re,urllib.request
-          run_id=os.environ['SOURCE_RUN_ID'];assert re.fullmatch(r'[0-9]+',run_id),'Invalid release run ID'
-          repo=os.environ['GITHUB_REPOSITORY']
-          req=urllib.request.Request(f'https://api.github.com/repos/{repo}/actions/runs/{run_id}',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','User-Agent':'APTREDLIGHT-Deployment'})
-          with urllib.request.urlopen(req,timeout=30) as response:run=json.load(response)
-          assert run['name']=='Sync Sites release to production' and run['path']=='.github/workflows/sync-sites-production.yml'
-          assert run['conclusion']=='success' and run['head_branch']=='main'
-          assert run['repository']['full_name']==repo and run['head_repository']['full_name']==repo
-          assert run['event'] in ['push','workflow_dispatch']
-          PY
-      - name: Download the exact verified release artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: hostinger-static-release
-          path: ${{ runner.temp }}/hostinger-release
-          github-token: ${{ github.token }}
-          run-id: ${{ env.SOURCE_RUN_ID }}
-      - name: Admit only the currently pinned release
-        run: >-
-          python3 tools/hostinger_deploy.py validate
-          --release "$RUNNER_TEMP/hostinger-release"
-          --pointer .openai/site-release.json
-          --receipt "$RUNNER_TEMP/hostinger-validation-receipt.json"
       - name: Load the deployment key and pinned SSH host identity
         env:
           HOSTINGER_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
