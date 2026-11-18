@@ -2,8 +2,8 @@
   "schema": 1,
   "project_id": "appgprj_6addb8c872b081918d711d7bc0c5cbf4",
   "source_origin": "https://aptredlight-wellness.wk20230211.chatgpt.site",
-  "source_commit": "fc852d6f15bc28187d85214ab53a3c3116c57b1b",
-  "sites_version": 38,
-  "manifest_sha256": "5be917649c58e78e16d2ac1a8ad47ef5ad8b4cb0b609557744142b36b9e9034e",
+  "source_commit": "52ea015292b5239632cfbbd87eab2677423aa67e",
+  "sites_version": 39,
+  "manifest_sha256": "7c5e88dbcf90a0e8ea208d950e5a952e09a0c8ef7daa877b0c2668d008db0b0c",
   "canonical_origin": "https://www.aptredlight.com"
 }
