@@ -12,34 +12,45 @@
 
 此流程用 `workflow_run` 串联，避免依赖 GitHub Actions 自己推送 `production` 后再触发另一个 push workflow。每次部署串行执行；相同旧版本或不匹配的发布不会被冒充为最新版本。
 
-## 只需一次的 Hostinger / GitHub 绑定
+## 只需一次的部署密钥绑定
 
-这一步必须由有权管理该站点和 GitHub 仓库的人完成。不要把私钥或账号密码发送到聊天或写进代码。
+站点管理员已提供 hPanel SSH Access 截图。以下公开配置已登记在 `.hostinger/deploy.json`，不用再手动添加服务器地址变量或 `HOSTINGER_KNOWN_HOSTS` secret：
 
-1. 在 Hostinger 中打开 `aptredlight.com` 的 SSH Access，启用该站点可用的 SSH 访问，并添加专用于部署的公钥。该服务器需要 `python3` 和 `tar`。保留对应私钥用于下一步。
-2. 打开 [GitHub Actions Secrets 设置](https://github.com/wk20230211-arch/aptredlight/settings/secrets/actions)，添加两个 secrets：
+| 配置项 | 已登记值 |
+| --- | --- |
+| SSH 服务器 | `45.87.81.210` |
+| 端口 | `65002` |
+| 用户 | `u469397229` |
+| 网站根目录 | `/home/u469397229/domains/aptredlight.com/public_html` |
+| ED25519 指纹 | `SHA256:4mfb2c67Lhi/idZu+pyYocKONELisV4IInwlFdR8t98` |
 
-   | 名称 | 内容 |
-   | --- | --- |
-   | `HOSTINGER_SSH_PRIVATE_KEY` | 与 Hostinger 部署公钥配对的完整私钥 |
-   | `HOSTINGER_KNOWN_HOSTS` | 从可信已有 SSH 连接或 Hostinger 核验过的服务器身份记录，不要直接信任未经核对的扫描结果 |
+每次部署先读取服务器的公开 ED25519 主机密钥，与 hPanel 提供的 SHA256 指纹逐字符比对。匹配后才加载部署私钥；不匹配即停止，不自动接受新的主机身份。服务器迁移或主机密钥轮换时，先通过 hPanel 核对并更新该指纹。
 
-3. 打开同页的 Variables 标签，添加 `HOSTINGER_SSH_HOST`，填写 Hostinger SSH Access 显示的服务器地址。该地址不包含协议、用户名或路径。
-4. 以下值来自项目保存的托管记录。端口可通过 `HOSTINGER_SSH_PORT` variable 覆盖；用户名和根目录锁定在当前配置，若 Hostinger 后台已变更，需先核对目标并同时更新 `.hostinger/deploy.json` 与脚本的目标用户约束：
+剩下只需要一对专用部署密钥：**公钥授权给 Hostinger；配套私钥放入 GitHub Secrets**。密码、私钥都不要发送到聊天或提交到代码。
 
-   | 配置项 | 当前值 |
-   | --- | --- |
-   | `HOSTINGER_SSH_PORT` | `65002` |
-   | SSH 用户 | `u469397229` |
-   | 网站根目录 | `/home/u469397229/domains/aptredlight.com/public_html` |
+### Windows 一次性操作
 
-5. 配置完成后，重新运行此前因 `needs_setup` 失败的部署 job，或在 [自动部署工作流](https://github.com/wk20230211-arch/aptredlight/actions/workflows/hostinger-deploy.yml) 使用 Run workflow，输入最近成功的同步 run ID。该同步 run 必须包含 `hostinger-static-release` artifact；旧的、不含此 artifact 的 run 需要先重跑同步。
+1. 在自己的 Windows 电脑下载并阅读 [Connect-APTREDLIGHT.ps1](../setup/Connect-APTREDLIGHT.ps1)，按 [Windows 配置说明](../setup/WINDOWS-SETUP.zh-CN.txt)运行。脚本先核验服务器身份，再在本机生成或安全复用专用密钥。Hostinger SSH 密码仅由你在原生 SSH 密码提示中输入，用于一次性授权公钥。脚本只安装这一条受限公钥，校验服务器端文件所有者、保留既有公钥、避免重复添加，并在检测到并发变更时停止。
+2. 若本机已有登录的 GitHub CLI，脚本可直接把私钥通过标准输入保存到正确的 GitHub secret；否则会打开 GitHub 新建 secret 页面，并把私钥仅放到本机剪贴板。Name 填 `HOSTINGER_SSH_PRIVATE_KEY`，Secret 粘贴，点击 Add secret。脚本不把私钥打印到聊天、控制台或上传为文件。
+3. 配置完成后回复“已配置”，由助手检查并重跑**最新**的部署任务。此后每次更新发布指针即自动覆盖与验收，无需重复此绑定或上传 ZIP。
 
-绑定后，后续更新发布指针就自动完成覆盖、线上验证与失败回滚，不用再次填写连接信息或手动上传文件。当前 Hostinger MCP 连接返回 0 个站点并不等于以上 SSH 身份已绑定；自动化不能凭空取得站点凭据。
+GitHub 设置入口：[Actions Secrets](https://github.com/wk20230211-arch/aptredlight/settings/secrets/actions)。服务器需有 `python3` 和 `tar`；脚本及部署流程会检查可用性。Windows 脚本的实际登录步骤必须在站点管理员自己的电脑完成，执行受设备策略限制时联系设备管理员，不更改系统安全策略。
+
+### 已有专用部署密钥
+
+如果 Hostinger 已授权该专用公钥，只需在上述 GitHub 设置中添加一个 secret：
+
+| 名称 | 内容 |
+| --- | --- |
+| `HOSTINGER_SSH_PRIVATE_KEY` | 与已授权部署公钥配对的完整、适用于无人值守 CI 的 SSH 私钥 |
+
+选择新配置提交后的最新自动部署运行；历史运行使用当时旧版工作流，可能仍要求旧的三项设置。也可以在 [工作流](https://github.com/wk20230211-arch/aptredlight/actions/workflows/hostinger-deploy.yml) 使用 Run workflow，输入最近成功、且包含 `hostinger-static-release` artifact 的同步 run ID。
+
+`HOSTINGER_SSH_HOST` 和 `HOSTINGER_SSH_PORT` variables 只用于经管理员核对的迁移覆盖，日常不需要设置。迁移后的服务器仍须匹配已核验的主机指纹，且用户与网站根目录约束必须一致。
 
 ## 如何确认已上线
 
-- `validate-automation` 成功：仅证明自动化代码通过测试。
+- `validate-automation` 与 `validate-windows-setup` 成功：分别证明部署逻辑检查通过、Windows PowerShell 5.1 脚本语法可解析；不证明管理员已完成实际密钥绑定或正式域名更新。
 - `needs_setup`：缺少一次性绑定，未部署。
 - `hostinger-validation-receipt.json`：证明下载的 artifact 与指定发布一致。
 - `hostinger-deployment-receipt.json`：记录真实部署、线上检查及回滚结果。以 `status` 和 HTTP 检查结果判断成功，不能仅看到 GitHub `production` 已更新就认为正式域名已更新。

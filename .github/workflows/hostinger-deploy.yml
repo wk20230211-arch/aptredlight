@@ -11,6 +11,10 @@ on:
       - 'tools/build_hostinger_manifest.py'
       - 'tools/verify_hostinger_identity.py'
       - 'tools/test_hostinger_identity.py'
+      - 'tools/install_hostinger_public_key.py'
+      - 'tools/test_hostinger_public_key.py'
+      - 'setup/Connect-APTREDLIGHT.ps1'
+      - 'setup/WINDOWS-SETUP.zh-CN.txt'
   pull_request:
     branches: [main]
     paths:
@@ -21,6 +25,10 @@ on:
       - 'tools/build_hostinger_manifest.py'
       - 'tools/verify_hostinger_identity.py'
       - 'tools/test_hostinger_identity.py'
+      - 'tools/install_hostinger_public_key.py'
+      - 'tools/test_hostinger_public_key.py'
+      - 'setup/Connect-APTREDLIGHT.ps1'
+      - 'setup/WINDOWS-SETUP.zh-CN.txt'
   workflow_run:
     workflows: ['Sync Sites release to production']
     types: [completed]
@@ -52,11 +60,51 @@ jobs:
         run: |
           python3 tools/test_hostinger_deploy.py
           python3 tools/test_hostinger_identity.py
+          python3 tools/test_hostinger_public_key.py
       - name: Check automation syntax
-        run: python3 -m py_compile tools/hostinger_deploy.py tools/build_hostinger_manifest.py tools/verify_hostinger_identity.py
+        run: python3 -m py_compile tools/hostinger_deploy.py tools/build_hostinger_manifest.py tools/verify_hostinger_identity.py tools/install_hostinger_public_key.py
+
+      - name: Verify the Windows helper embeds the reviewed public-key installer
+        run: |
+          python3 - <<'PYCODE'
+          import base64,pathlib,re,zlib
+          script=pathlib.Path('setup/Connect-APTREDLIGHT.ps1').read_text(encoding='utf-8-sig')
+          match=re.search(r"\$InstallerBase64 = '([A-Za-z0-9+/=]+)'",script)
+          assert match,'Missing embedded public-key installer'
+          packed=base64.b64decode(match[1],validate=True)
+          source=zlib.decompress(packed)
+          assert source==pathlib.Path('tools/install_hostinger_public_key.py').read_bytes(),'Installer source drift'
+          command="python3 -c 'import zlib;exec(zlib.decompress(bytes(["+','.join(map(str,packed))+"])))'"
+          assert len(command)<=27000,'Windows SSH command is too long'
+          PYCODE
+
+  validate-windows-setup:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Parse the local setup script with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          $path = Join-Path $env:GITHUB_WORKSPACE 'setup\Connect-APTREDLIGHT.ps1'
+          $null = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | ForEach-Object { Write-Error $_.Message }
+            throw 'The Windows setup script contains syntax errors.'
+          }
+          $bytes = [IO.File]::ReadAllBytes($path)
+          if ($bytes.Length -lt 3 -or $bytes[0] -ne 239 -or $bytes[1] -ne 187 -or $bytes[2] -ne 191) {
+            throw 'A UTF-8 BOM is required for Windows PowerShell 5.1.'
+          }
+          # Parse only: CI must never generate a real deployment key or authorize one.
+          Write-Output 'Windows PowerShell 5.1 syntax and UTF-8 BOM passed; no setup was executed.'
 
   deploy:
-    needs: validate-automation
+    needs: [validate-automation, validate-windows-setup]
     if: >-
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_run' &&

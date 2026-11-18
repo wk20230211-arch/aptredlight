@@ -1,0 +1,15 @@
+APTREDLIGHT Windows 一次性自动部署绑定
+
+1. 下载并阅读同目录 Connect-APTREDLIGHT.ps1，保存到“下载”目录。打开 Windows PowerShell 5.1，执行下面命令：
+
+   & "$env:USERPROFILE\Downloads\Connect-APTREDLIGHT.ps1"
+
+   若保存到其他目录，请将命令中的路径改成实际文件位置。脚本若被设备策略阻止，请联系设备管理员；不要更改系统安全策略。
+2. 脚本先核对 hPanel 指纹，再在本机生成或安全复用专用 SSH 密钥。生成时口令提示按两次 Enter 留空。首次公钥授权时，只在本机 ssh.exe 密码提示中输入 Hostinger 的 SSH 密码；密码和私钥都不要发送到聊天。
+3. 脚本会授权公钥并验证登录。如果本机已有登录的 GitHub CLI，会直接保存唯一需要的 secret；否则打开 GitHub 新建 secret 页面：Name 填 HOSTINGER_SSH_PRIVATE_KEY，Secret 按 Ctrl+V，点击 Add secret。回到 PowerShell 按 Enter 清除本次剪贴板私钥，最后向助手回复“已配置”。
+
+服务器/IP、端口、用户名和服务器指纹已在仓库固定；不用另建 HOSTINGER_SSH_HOST variable 或 HOSTINGER_KNOWN_HOSTS secret。指纹不符时脚本会停止，不会请求密码。
+
+专用密钥位于你电脑的 %USERPROFILE%\.ssh\aptredlight-github-deploy 及 .pub 文件。私钥只在你电脑和 GitHub Secrets 保存。脚本不会把它打印到控制台、聊天或上传为 artifact。
+
+这份脚本只做首次密钥绑定，不会覆盖网站。绑定完成后由现有 GitHub Actions 执行备份、覆盖、正式域名核验及失败回滚。
