@@ -563,8 +563,8 @@
     },
     {
       "path": "global.css",
-      "size": 12046,
-      "sha256": "d3eeaeab61bd987ff77d6a58c813642ad43a1500679c487cde2799f1a2fe0d6f"
+      "size": 14786,
+      "sha256": "252b91f38fc77ab34ddc1c83bdc88ec01cf4fb94480a9d97e51b33b606979e2f"
     },
     {
       "path": "global.js",
@@ -655,8 +655,8 @@
     },
     {
       "path": "journal.js",
-      "size": 1830,
-      "sha256": "3f6511a6c3c708479f9891f8ffc3f11875f996a576103ffb48aa3233ecf0fec8"
+      "size": 4199,
+      "sha256": "b1a6d4f70068c1796692657d49b98eb649cb94684ee9a3a78104f06f474c6601"
     },
     {
       "path": "lead-capture.css",
