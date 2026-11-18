@@ -10,7 +10,8 @@
  const fields=['wave-number','wave-family','wave-title','wave-description','wave-effect','wave-method','wave-engineering','spectrum-marker','spectrum-curve','spectrum-area','spectrum-guide','spectrum-peak','spectrum-peak-label','spectrum-chart-title','wave-status'];
  if(fields.some(id=>!get(id))||buttons.length!==waves.length)return;
  const content=root.querySelector('.wave-content'),visual=root.querySelector('.spectrum-visual');
- const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');let animation,visualAnimation;
+ const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');
+ const hover=window.matchMedia('(hover: hover) and (pointer: fine)');let animation,visualAnimation;
  function profile(nm){
   const left=32,right=688,bottom=204,peak=62;
   const x=left+(nm-domain.min)/(domain.max-domain.min)*(right-left);
@@ -22,11 +23,12 @@
   });
   return{x,peak,line:'M '+points.join(' L '),area:'M '+left+' '+bottom+' L '+points.join(' L ')+' L '+right+' '+bottom+' Z'};
  }
- function select(nm,{focus=false,announce=true}={}){
+ function select(nm,{focus=false,announce=true,preserveTabStop=false}={}){
   const wave=waves.find(item=>item.nm===nm);if(!wave)return false;
   const changed=Number(root.dataset.activeWavelength)!==nm;
   root.dataset.activeWavelength=String(nm);root.style.setProperty('--wave',wave.color);visual.style.setProperty('--wave',wave.color);
-  buttons.forEach(button=>{const selected=Number(button.dataset.wave)===nm;button.setAttribute('aria-pressed',String(selected));button.tabIndex=selected?0:-1;if(selected&&focus)button.focus()});
+  const keepTabStop=preserveTabStop&&buttons.includes(document.activeElement);
+  buttons.forEach(button=>{const selected=Number(button.dataset.wave)===nm;button.setAttribute('aria-pressed',String(selected));if(!keepTabStop)button.tabIndex=selected?0:-1;if(selected&&focus)button.focus()});
   get('wave-number').replaceChildren(document.createTextNode(nm+' '),Object.assign(document.createElement('small'),{textContent:'nm'}));
   get('wave-family').textContent=wave.family;get('wave-title').textContent=wave.title;
   get('wave-description').textContent=nm<700?'Visible spectrum · explore application and engineering considerations.':'Invisible spectrum · shown in illustrative color for navigation.';
@@ -37,7 +39,7 @@
   const label=get('spectrum-peak-label');label.setAttribute('x',curve.x<80?curve.x+12:curve.x>640?curve.x-12:curve.x);label.setAttribute('text-anchor',curve.x<80?'start':curve.x>640?'end':'middle');label.textContent=nm+' nm';
   get('spectrum-chart-title').textContent=nm+' nm nominal wavelength position — illustrative curve, not a measured spectrum';
   get('spectrum-marker').style.left=((nm-domain.min)/(domain.max-domain.min)*100)+'%';
-  const added=get('wave-added');if(added)added.textContent='';
+  const added=get('wave-added');if(added&&announce)added.textContent='';
   if(announce)get('wave-status').textContent=nm+' nm selected. '+wave.family+'. Illustrative profile and development notes updated.';
   if(changed&&!reduced.matches&&typeof content.animate==='function'){
    animation?.cancel();animation=content.animate([{opacity:.35,transform:'translateY(5px)'},{opacity:1,transform:'translateY(0)'}],{duration:180,easing:'ease-out'});
@@ -46,6 +48,17 @@
   visual.dataset.wavelength=String(nm);return true;
  }
  tabs.addEventListener('click',event=>{const button=event.target.closest('button[data-wave]');if(button&&tabs.contains(button))select(Number(button.dataset.wave))});
+ buttons.forEach(button=>button.addEventListener('pointerenter',event=>{
+  if(!hover.matches||event.pointerType!=='mouse')return;
+  const nm=Number(button.dataset.wave);
+  if(nm!==Number(root.dataset.activeWavelength))select(nm,{announce:false,preserveTabStop:true});
+ }));
+ tabs.addEventListener('focusout',event=>{
+  if(buttons.includes(event.relatedTarget))return;
+  // Hover may change the view while a different card retains keyboard focus.
+  // Restore the selected card as the entry point only after focus leaves the group.
+  buttons.forEach(button=>button.tabIndex=Number(button.dataset.wave)===Number(root.dataset.activeWavelength)?0:-1);
+ });
  tabs.addEventListener('keydown',event=>{
   const current=event.target.closest('button[data-wave]');if(!current)return;
   const index=buttons.indexOf(current);let next;
