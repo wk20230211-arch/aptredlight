@@ -52,6 +52,61 @@ function Protect-PrivateKey([string]$Path) {
     }
 }
 
+
+function Get-PublicKeyIdentity([string]$Text) {
+    if ([string]::IsNullOrWhiteSpace($Text) -or $Text.Length -gt 4096) {
+        throw 'A single public key record is required.'
+    }
+    $Record = $Text.Trim()
+    if ($Record.Contains("`r") -or $Record.Contains("`n") -or $Record.Contains([char]0)) {
+        throw 'The public key must contain exactly one record.'
+    }
+    $Columns = $Record -split '\s+'
+    if ($Columns.Count -lt 2 -or $Columns[0] -cne 'ssh-ed25519') {
+        throw 'The dedicated public key must use ssh-ed25519.'
+    }
+    try { $Blob = [Convert]::FromBase64String($Columns[1]) }
+    catch { throw 'Invalid dedicated public key encoding.' }
+    $Prefix = [byte[]]@(0, 0, 0, 11, 115, 115, 104, 45, 101, 100, 50, 53, 53, 49, 57, 0, 0, 0, 32)
+    if ($Blob.Length -ne 51 -or [Convert]::ToBase64String($Blob) -cne $Columns[1]) {
+        throw 'Invalid dedicated public key wire data.'
+    }
+    for ($Index = 0; $Index -lt $Prefix.Length; $Index++) {
+        if ($Blob[$Index] -ne $Prefix[$Index]) { throw 'Invalid dedicated public key wire data.' }
+    }
+    # Comments are labels, not part of the SSH public-key identity.
+    return 'ssh-ed25519 ' + $Columns[1]
+}
+
+function Get-DerivedPublicKeyIdentity([string]$KeygenPath, [string]$Path) {
+    if ($Path.Contains('"')) { throw 'Unsupported local key path.' }
+    $Info = New-Object Diagnostics.ProcessStartInfo
+    $Info.FileName = $KeygenPath
+    # Keep an explicit empty passphrase even in Windows PowerShell 5.1.
+    $Info.Arguments = '-y -P "" -f "' + $Path + '"'
+    $Info.UseShellExecute = $false
+    $Info.RedirectStandardInput = $true
+    $Info.RedirectStandardOutput = $true
+    $Info.RedirectStandardError = $true
+    $Info.CreateNoWindow = $true
+    $Process = [Diagnostics.Process]::Start($Info)
+    try {
+        $Process.StandardInput.Close()
+        $OutputTask = $Process.StandardOutput.ReadToEndAsync()
+        $ErrorTask = $Process.StandardError.ReadToEndAsync()
+        if (-not $Process.WaitForExit(15000)) {
+            try { $Process.Kill() } catch { }
+            throw 'Public-key derivation timed out. Existing keys were not overwritten.'
+        }
+        $DerivedText = $OutputTask.Result
+        $UnusedError = $ErrorTask.Result
+        if ($Process.ExitCode -ne 0) {
+            throw 'The dedicated CI key must be readable without a passphrase. Existing keys were not overwritten.'
+        }
+        return Get-PublicKeyIdentity -Text $DerivedText
+    } finally { $Process.Dispose() }
+}
+
 try {
     if ($env:OS -ne 'Windows_NT' -or $env:GITHUB_ACTIONS -eq 'true') {
         throw 'Run this setup on your own Windows computer, not in a CI runner.'
@@ -116,25 +171,11 @@ try {
     if ((Get-Item -LiteralPath $Key).Length -gt 16384) { throw 'Unexpected private key format or size.' }
     Protect-PrivateKey $Key
 
-    # A literal empty -P argument is passed with .NET, avoiding PowerShell 5 empty-argument loss.
-    $Info = New-Object Diagnostics.ProcessStartInfo
-    $Info.FileName = $Keygen
-    $Info.Arguments = '-y -P "" -f "' + $Key + '"'
-    $Info.UseShellExecute = $false
-    $Info.RedirectStandardOutput = $true
-    $Info.RedirectStandardError = $true
-    $Info.CreateNoWindow = $true
-    $Process = [Diagnostics.Process]::Start($Info)
-    $DerivedPublic = $Process.StandardOutput.ReadToEnd().Trim()
-    $UnusedError = $Process.StandardError.ReadToEnd()
-    $Process.WaitForExit()
-    if ($Process.ExitCode -ne 0) { $Process.Dispose(); throw 'The dedicated CI key must be readable without a passphrase. Existing keys were not overwritten.' }
-    $Process.Dispose()
-    $PublicKey = [IO.File]::ReadAllText($PublicKeyPath).Trim()
-    if (($PublicKey -split '\r?\n').Count -ne 1) { throw 'The public key must contain exactly one record.' }
-    $PublicColumns = $PublicKey -split '\s+'
-    $DerivedColumns = $DerivedPublic -split '\s+'
-    if ($PublicColumns.Count -lt 2 -or $DerivedColumns.Count -ne 2 -or $PublicColumns[0] -cne 'ssh-ed25519' -or $PublicColumns[0] -cne $DerivedColumns[0] -or $PublicColumns[1] -cne $DerivedColumns[1]) { throw 'The dedicated public and private keys do not match.' }
+    $PublicKey = Get-PublicKeyIdentity -Text ([IO.File]::ReadAllText($PublicKeyPath))
+    $DerivedPublic = Get-DerivedPublicKeyIdentity -KeygenPath $Keygen -Path $Key
+    if ($PublicKey -cne $DerivedPublic) {
+        throw 'The dedicated public and private keys do not match. Existing keys were not overwritten.'
+    }
 
     $Base = @('-F', $EmptyConfig, '-p', [string]$TargetPort, '-o', 'StrictHostKeyChecking=yes', '-o', 'HostKeyAlgorithms=ssh-ed25519', '-o', 'GlobalKnownHostsFile=none', '-o', 'ForwardAgent=no', '-o', 'ConnectTimeout=20')
     $Destination = $TargetUser + '@' + $TargetHost

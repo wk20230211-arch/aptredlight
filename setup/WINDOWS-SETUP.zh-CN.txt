@@ -1,8 +1,8 @@
 APTREDLIGHT Windows 一次性自动部署绑定
 
-1. 下载并阅读同目录 Connect-APTREDLIGHT-v2.ps1，保存到“下载”目录。打开 Windows PowerShell 5.1，执行下面命令：
+1. 下载并阅读同目录 Connect-APTREDLIGHT-v3.ps1，保存到“下载”目录。打开 Windows PowerShell 5.1，执行下面命令：
 
-   & "$env:USERPROFILE\Downloads\Connect-APTREDLIGHT-v2.ps1"
+   & "$env:USERPROFILE\Downloads\Connect-APTREDLIGHT-v3.ps1"
 
    若保存到其他目录，请将命令中的路径改成实际文件位置。脚本若被设备策略阻止，请联系设备管理员；不要更改系统安全策略。
 2. 脚本先核对 hPanel 指纹，再在本机生成或安全复用专用 SSH 密钥。生成时口令提示按两次 Enter 留空。首次公钥授权时，只在本机 ssh.exe 密码提示中输入 Hostinger 的 SSH 密码；密码和私钥都不要发送到聊天。
@@ -17,3 +17,5 @@ APTREDLIGHT Windows 一次性自动部署绑定
 权限处理说明：脚本只修改当前用户拥有的专用私钥文件的 DACL，保留所有者，不读取或修改审计 SACL，不需要 SeSecurityPrivilege。遇到所有者不符会停止，不会提权或重建密钥。
 
 若旧版在第2/4步报SeSecurityPrivilege，请下载v2文件，使用新文件名运行。已有专用密钥会保留并复用；无需删除密钥，也无需以管理员身份重跑旧脚本。
+
+公私钥校验修复：OpenSSH导出的公钥允许带尾部注释；v3比较算法与规范公钥数据，忽略注释，不删除或重建已有密钥。仅当实际key数据不同才停止。Windows测试覆盖真实一次性测试密钥导出及含空格路径；测试密钥不用于部署且会删除。
