@@ -5,6 +5,7 @@ on:
     paths:
       - '.openai/site-release.json'
       - 'tools/sync_sites_release.py'
+      - 'tools/build_hostinger_manifest.py'
       - '.github/workflows/sync-sites-production.yml'
   workflow_dispatch:
 permissions:
@@ -22,6 +23,18 @@ jobs:
           fetch-depth: 0
       - name: Download and verify the pinned Sites release
         run: python3 tools/sync_sites_release.py "$RUNNER_TEMP/aptredlight-release"
+      - name: Prepare a pinned Hostinger release artifact
+        run: |
+          cp -a "$RUNNER_TEMP/aptredlight-release" "$RUNNER_TEMP/hostinger-release"
+          python3 tools/build_hostinger_manifest.py --release "$RUNNER_TEMP/hostinger-release" --pointer .openai/site-release.json
+      - name: Retain the exact release for automatic Hostinger deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: hostinger-static-release
+          path: ${{ runner.temp }}/hostinger-release/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
       - name: Publish verified website files to production branch
         env:
           RELEASE_PATH: ${{ runner.temp }}/aptredlight-release

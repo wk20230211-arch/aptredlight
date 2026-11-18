@@ -1,0 +1,180 @@
+name: Deploy verified release to Hostinger
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hostinger-deploy.yml'
+      - '.hostinger/deploy.json'
+      - 'tools/hostinger_deploy.py'
+      - 'tools/test_hostinger_deploy.py'
+      - 'tools/build_hostinger_manifest.py'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/hostinger-deploy.yml'
+      - '.hostinger/deploy.json'
+      - 'tools/hostinger_deploy.py'
+      - 'tools/test_hostinger_deploy.py'
+      - 'tools/build_hostinger_manifest.py'
+  workflow_run:
+    workflows: ['Sync Sites release to production']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sync_run_id:
+        description: Successful 'Sync Sites release to production' run containing hostinger-static-release
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: aptredlight-hostinger-production
+  cancel-in-progress: false
+
+jobs:
+  validate-automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Test release admission, overlay preservation and rollback
+        run: python3 tools/test_hostinger_deploy.py
+      - name: Check automation syntax
+        run: python3 -m py_compile tools/hostinger_deploy.py tools/build_hostinger_manifest.py
+
+  deploy:
+    needs: validate-automation
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_RUN_ID: ${{ github.event.workflow_run.id || inputs.sync_run_id }}
+    steps:
+      # Deploy code is always taken from the trusted default branch, never from the artifact.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Check one-time deployment binding
+        env:
+          HOSTINGER_SSH_HOST: ${{ vars.HOSTINGER_SSH_HOST }}
+          HOSTINGER_SSH_PORT: ${{ vars.HOSTINGER_SSH_PORT }}
+          HAS_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY != '' }}
+          HAS_KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS != '' }}
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,pathlib,re,sys
+          config=json.loads(pathlib.Path('.hostinger/deploy.json').read_text())
+          pointer=json.loads(pathlib.Path('.openai/site-release.json').read_text())
+          assert config['domain']=='aptredlight.com' and config['canonical_origin']=='https://www.aptredlight.com'
+          assert config['project_id']==pointer['project_id']=='appgprj_6addb8c872b081918d711d7bc0c5cbf4'
+          missing=[]
+          if not os.environ.get('HOSTINGER_SSH_HOST','').strip():missing.append('variable HOSTINGER_SSH_HOST')
+          if os.environ.get('HAS_SSH_PRIVATE_KEY')!='true':missing.append('secret HOSTINGER_SSH_PRIVATE_KEY')
+          if os.environ.get('HAS_KNOWN_HOSTS')!='true':missing.append('secret HOSTINGER_KNOWN_HOSTS')
+          if missing:
+              receipt={'status':'needs_setup','deployed':False,'sites_version':pointer['sites_version'],'source_commit':pointer['source_commit'],'missing':missing,'checked_at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+              pathlib.Path(os.environ['RUNNER_TEMP'],'hostinger-deployment-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
+              print('::error::One-time Hostinger deployment binding is incomplete. See docs/hostinger-auto-deploy.zh-CN.md. Missing: '+', '.join(missing))
+              sys.exit(1)
+          host=os.environ['HOSTINGER_SSH_HOST'].strip()
+          port=int(os.environ.get('HOSTINGER_SSH_PORT') or config['ssh_port'])
+          user=config['ssh_user']
+          web_root=config['web_root']
+          assert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]*',host),'Invalid SSH host'
+          assert 1<=port<=65535,'Invalid SSH port'
+          assert user=='u469397229','Unexpected Hostinger hosting user'
+          assert web_root==f'/home/{user}/domains/aptredlight.com/public_html','Unexpected website root'
+          with open(os.environ['GITHUB_ENV'],'a') as out:
+              for key,value in [('DEPLOY_HOST',host),('DEPLOY_PORT',str(port)),('DEPLOY_USER',user),('DEPLOY_WEB_ROOT',web_root)]:out.write(key+'='+value+'\n')
+          PY
+      - name: Verify the triggering release run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,os,re,urllib.request
+          run_id=os.environ['SOURCE_RUN_ID'];assert re.fullmatch(r'[0-9]+',run_id),'Invalid release run ID'
+          repo=os.environ['GITHUB_REPOSITORY']
+          req=urllib.request.Request(f'https://api.github.com/repos/{repo}/actions/runs/{run_id}',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','User-Agent':'APTREDLIGHT-Deployment'})
+          with urllib.request.urlopen(req,timeout=30) as response:run=json.load(response)
+          assert run['name']=='Sync Sites release to production' and run['path']=='.github/workflows/sync-sites-production.yml'
+          assert run['conclusion']=='success' and run['head_branch']=='main'
+          assert run['repository']['full_name']==repo and run['head_repository']['full_name']==repo
+          assert run['event'] in ['push','workflow_dispatch']
+          PY
+      - name: Download the exact verified release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hostinger-static-release
+          path: ${{ runner.temp }}/hostinger-release
+          github-token: ${{ github.token }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+      - name: Admit only the currently pinned release
+        run: >-
+          python3 tools/hostinger_deploy.py validate
+          --release "$RUNNER_TEMP/hostinger-release"
+          --pointer .openai/site-release.json
+          --receipt "$RUNNER_TEMP/hostinger-validation-receipt.json"
+      - name: Load the deployment key and pinned SSH host identity
+        env:
+          HOSTINGER_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          HOSTINGER_KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$HOSTINGER_KNOWN_HOSTS" > "$RUNNER_TEMP/hostinger-known-hosts"
+          eval "$(ssh-agent -s)" > /dev/null
+          printf '%s\n' "$HOSTINGER_SSH_PRIVATE_KEY" | ssh-add - > /dev/null
+          printf 'SSH_AUTH_SOCK=%s\nSSH_AGENT_PID=%s\n' "$SSH_AUTH_SOCK" "$SSH_AGENT_PID" >> "$GITHUB_ENV"
+      - name: Back up, overlay, verify the public site and roll back on failure
+        run: >-
+          python3 tools/hostinger_deploy.py deploy
+          --release "$RUNNER_TEMP/hostinger-release"
+          --pointer .openai/site-release.json
+          --host "$DEPLOY_HOST"
+          --port "$DEPLOY_PORT"
+          --user "$DEPLOY_USER"
+          --web-root "$DEPLOY_WEB_ROOT"
+          --known-hosts "$RUNNER_TEMP/hostinger-known-hosts"
+          --receipt "$RUNNER_TEMP/hostinger-deployment-receipt.json"
+      - name: Retain deployment and verification receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hostinger-deployment-receipts
+          path: |
+            ${{ runner.temp }}/hostinger-validation-receipt.json
+            ${{ runner.temp }}/hostinger-deployment-receipt.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Summarize the actual deployment state
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib
+          path=pathlib.Path(os.environ['RUNNER_TEMP'],'hostinger-deployment-receipt.json')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as out:
+              out.write('## Hostinger production deployment\n\n')
+              if path.exists():out.write('```json\n'+json.dumps(json.loads(path.read_text()),ensure_ascii=False,indent=2)+'\n```\n')
+              else:out.write('No production deployment receipt was produced. Check the failed step; this run does not prove the website was updated.\n')
+          PY
+      - name: Remove the ephemeral deployment key
+        if: always()
+        run: |
+          if [ -n "${SSH_AGENT_PID:-}" ]; then
+            ssh-add -D > /dev/null 2>&1 || true
+            ssh-agent -k > /dev/null 2>&1 || true
+          fi
+          rm -f "$RUNNER_TEMP/hostinger-known-hosts"

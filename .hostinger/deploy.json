@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "project_id": "appgprj_6addb8c872b081918d711d7bc0c5cbf4",
+  "domain": "aptredlight.com",
+  "canonical_origin": "https://www.aptredlight.com",
+  "ssh_user": "u469397229",
+  "ssh_port": 65002,
+  "web_root": "/home/u469397229/domains/aptredlight.com/public_html"
+}
