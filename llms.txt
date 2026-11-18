@@ -26,6 +26,7 @@ Project markets discussed: United States, United Kingdom, Europe and Australia.
 - [Red Light Therapy Cap](https://www.aptredlight.com/products/red-light-therapy-cap.html): Confirm the quoted model, configuration and available evidence.
 
 ## Buyer documentation
+- [OEM/ODM project workflow diagram](https://www.aptredlight.com/resources/aptredlight-oem-workflow.svg): Buyer-planning workflow covering project scope, evidence, sampling and shipment requirements; not a certification or delivery guarantee.
 - [Product library](https://www.aptredlight.com/product-library.html): Grouped product images, parameters and available attachments.
 - [Technical documentation](https://www.aptredlight.com/technical-documentation.html): Measurement methods and model-specific evidence requests.
 - [Certificates and reports](https://www.aptredlight.com/certificates.html): Review the exact model, entity, market, document scope and validity.
