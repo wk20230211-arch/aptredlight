@@ -22,12 +22,34 @@ function Assert-RegularPath([string]$Path) {
 
 function Protect-PrivateKey([string]$Path) {
     $Sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
-    $Acl = New-Object Security.AccessControl.FileSecurity
-    $Acl.SetOwner($Sid)
+    $PrivateFile = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if ($PrivateFile -isnot [IO.FileInfo] -or ($PrivateFile.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw 'The dedicated key must be a regular local file.'
+    }
+    # Read owner and DACL only. Audit/SACL access requires SeSecurityPrivilege.
+    # Retain the existing owner and persist only modified access rules through .NET.
+    $Sections = [Security.AccessControl.AccessControlSections]::Access -bor [Security.AccessControl.AccessControlSections]::Owner
+    $Acl = $PrivateFile.GetAccessControl($Sections)
+    if ($Acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne $Sid.Value) {
+        throw 'The dedicated key is owned by a different account. Ask the device administrator to verify it.'
+    }
     $Acl.SetAccessRuleProtection($true, $false)
+    foreach ($ExistingRule in @($Acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))) {
+        $Acl.RemoveAccessRuleSpecific($ExistingRule)
+    }
     $Rule = New-Object Security.AccessControl.FileSystemAccessRule -ArgumentList $Sid, 'FullControl', 'Allow'
     $Acl.AddAccessRule($Rule)
-    Set-Acl -LiteralPath $Path -AclObject $Acl
+    $PrivateFile.SetAccessControl($Acl)
+
+    $CheckedAcl = $PrivateFile.GetAccessControl($Sections)
+    $CheckedRules = @($CheckedAcl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+    if ($CheckedAcl.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne $Sid.Value -or
+        -not $CheckedAcl.AreAccessRulesProtected -or $CheckedRules.Count -ne 1 -or
+        $CheckedRules[0].IdentityReference.Value -cne $Sid.Value -or
+        $CheckedRules[0].AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or
+        ($CheckedRules[0].FileSystemRights -band [Security.AccessControl.FileSystemRights]::FullControl) -ne [Security.AccessControl.FileSystemRights]::FullControl) {
+        throw 'The dedicated key permissions could not be confirmed. No private key was uploaded.'
+    }
 }
 
 try {
@@ -86,6 +108,7 @@ try {
     if ((Test-Path -LiteralPath $Key) -ne (Test-Path -LiteralPath $PublicKeyPath)) { throw 'Only one half of the dedicated key pair exists. Do not overwrite it; ask your administrator.' }
     if (-not (Test-Path -LiteralPath $Key)) {
         Write-Host 'When ssh-keygen asks for a passphrase, press Enter twice. The dedicated CI key is stored in your protected user profile and GitHub Secrets.'
+        Write-Host '出现 Enter passphrase 及再次确认时，分别直接按 Enter；这里留空供自动部署使用。'
         & $Keygen -t ed25519 -C aptredlight-github-deploy -f $Key
         if ($LASTEXITCODE -ne 0) { throw 'Key generation did not finish.' }
     }
@@ -125,6 +148,7 @@ try {
 
     if (-not $KeyWorks) {
         Write-Host '3/4 Authorize only the public key. Enter the Hostinger SSH password in the native ssh.exe prompt on THIS computer. Do not send that password to chat.'
+        Write-Host '等待 SSH 明确显示 password: 后输入 SSH 密码；输入不显示字符属于正常现象。'
         # The reviewed installer is embedded, not downloaded or taken from shell startup files.
         $InstallerBase64 = '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'
         $InstallerBytes = [Convert]::FromBase64String($InstallerBase64)
@@ -175,6 +199,7 @@ try {
 } catch {
     Write-Error -Message ('Setup stopped: ' + $_.Exception.Message) -ErrorAction Continue
     Write-Host 'Do not change system execution policy. Ask the device or hosting administrator if a step is blocked.'
+    Write-Host '脚本已停止。请记录上方报错；不要在 PS C:\...> 命令提示符后输入密码。'
     exit 1
 } finally {
     if ($ClipboardContainsKey -and $null -ne $PrivateText) {

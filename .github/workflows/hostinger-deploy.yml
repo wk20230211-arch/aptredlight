@@ -14,7 +14,9 @@ on:
       - 'tools/install_hostinger_public_key.py'
       - 'tools/test_hostinger_public_key.py'
       - 'setup/Connect-APTREDLIGHT.ps1'
+      - 'setup/Connect-APTREDLIGHT-v2.ps1'
       - 'setup/WINDOWS-SETUP.zh-CN.txt'
+      - 'tools/test_windows_key_acl.ps1'
   pull_request:
     branches: [main]
     paths:
@@ -28,7 +30,9 @@ on:
       - 'tools/install_hostinger_public_key.py'
       - 'tools/test_hostinger_public_key.py'
       - 'setup/Connect-APTREDLIGHT.ps1'
+      - 'setup/Connect-APTREDLIGHT-v2.ps1'
       - 'setup/WINDOWS-SETUP.zh-CN.txt'
+      - 'tools/test_windows_key_acl.ps1'
   workflow_run:
     workflows: ['Sync Sites release to production']
     types: [completed]
@@ -68,6 +72,7 @@ jobs:
         run: |
           python3 - <<'PYCODE'
           import base64,pathlib,re,zlib
+          assert pathlib.Path('setup/Connect-APTREDLIGHT-v2.ps1').read_bytes()==pathlib.Path('setup/Connect-APTREDLIGHT.ps1').read_bytes(),'Windows download alias drift'
           script=pathlib.Path('setup/Connect-APTREDLIGHT.ps1').read_text(encoding='utf-8-sig')
           match=re.search(r"\$InstallerBase64 = '([A-Za-z0-9+/=]+)'",script)
           assert match,'Missing embedded public-key installer'
@@ -102,6 +107,9 @@ jobs:
           }
           # Parse only: CI must never generate a real deployment key or authorize one.
           Write-Output 'Windows PowerShell 5.1 syntax and UTF-8 BOM passed; no setup was executed.'
+      - name: Test private-key file ACL handling without SeSecurityPrivilege
+        shell: powershell
+        run: .\tools\test_windows_key_acl.ps1
 
   deploy:
     needs: [validate-automation, validate-windows-setup]

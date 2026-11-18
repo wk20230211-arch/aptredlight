@@ -30,7 +30,7 @@
 
 ### Windows 一次性操作
 
-1. 在自己的 Windows 电脑下载并阅读 [Connect-APTREDLIGHT.ps1](../setup/Connect-APTREDLIGHT.ps1)，按 [Windows 配置说明](../setup/WINDOWS-SETUP.zh-CN.txt)运行。脚本先核验服务器身份，再在本机生成或安全复用专用密钥。Hostinger SSH 密码仅由你在原生 SSH 密码提示中输入，用于一次性授权公钥。脚本只安装这一条受限公钥，校验服务器端文件所有者、保留既有公钥、避免重复添加，并在检测到并发变更时停止。
+1. 在自己的 Windows 电脑下载并阅读 [Connect-APTREDLIGHT-v2.ps1](../setup/Connect-APTREDLIGHT-v2.ps1)，按 [Windows 配置说明](../setup/WINDOWS-SETUP.zh-CN.txt)运行。脚本先核验服务器身份，再在本机生成或安全复用专用密钥。Hostinger SSH 密码仅由你在原生 SSH 密码提示中输入，用于一次性授权公钥。脚本只安装这一条受限公钥，校验服务器端文件所有者、保留既有公钥、避免重复添加，并在检测到并发变更时停止。
 2. 若本机已有登录的 GitHub CLI，脚本可直接把私钥通过标准输入保存到正确的 GitHub secret；否则会打开 GitHub 新建 secret 页面，并把私钥仅放到本机剪贴板。Name 填 `HOSTINGER_SSH_PRIVATE_KEY`，Secret 粘贴，点击 Add secret。脚本不把私钥打印到聊天、控制台或上传为文件。
 3. 配置完成后回复“已配置”，由助手检查并重跑**最新**的部署任务。此后每次更新发布指针即自动覆盖与验收，无需重复此绑定或上传 ZIP。
 
@@ -59,3 +59,9 @@ GitHub 设置入口：[Actions Secrets](https://github.com/wk20230211-arch/aptre
 ## 恢复和回滚
 
 部署备份位于站点根目录以外、同一 SSH 用户的私有目录，不提供公开下载。自动验证失败会尝试恢复本次修改。若连接中断导致结果未知，应先查回执和远端锁／备份，禁止把未确认状态记成成功。显式历史回滚需要使用经核验的旧发布与脚本提供的回滚命令，并重新完成线上验证。
+
+## Windows 第2步 SeSecurityPrivilege 错误
+
+旧版使用 Set-Acl 写入全新安全描述符，可能触发不必要的审计权限请求。v2只读取Owner与Access，确认现有所有者为当前用户，保留所有者，只用.NET持久化DACL并回读核验。新增Windows测试在专门测试进程移除SeSecurityPrivilege后，用临时普通文本文件验证真实ACL操作；不生成或读取真实SSH私钥。这个测试证明该操作不需要此项特权，不代表所有设备管理策略均已验收。
+
+请改用v2文件；原有专用密钥会安全复用。文件所有者不符时停止并由设备管理员核查，不自动修改所有权或提权。
