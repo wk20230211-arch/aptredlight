@@ -1,6 +1,10 @@
 Options -Indexes
 DirectoryIndex index.html
 RewriteEngine On
+# BEGIN APTREDLIGHT CANONICAL INDEX URLS
+RewriteCond %{THE_REQUEST} \s/+[^?\s]*index\.html(?:[?\s]) [NC]
+RewriteRule ^((?:de|es|fr|guides|solutions|zh\-CN)/)?index\.html$ https://www.aptredlight.com/$1 [R=301,L,NE]
+# END APTREDLIGHT CANONICAL INDEX URLS
 RewriteCond %{HTTP_HOST} ^aptredlight\.com$ [NC,OR]
 RewriteCond %{HTTPS} !=on
 RewriteCond %{HTTP_HOST} ^(?:www\.)?aptredlight\.com$ [NC]
