@@ -1,0 +1,48 @@
+name: Audit production sitemap indexability
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/seo-sitemap-audit.yml'
+      - 'tools/audit_production_sitemap.py'
+      - 'tools/test_audit_production_sitemap.py'
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Deploy verified release to Hostinger']
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aptredlight-production-seo-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
+          persist-credentials: false
+      - name: Test audit admission and redirect handling without network
+        run: python3 tools/test_audit_production_sitemap.py
+      - name: Verify public sitemap URLs, canonicals and document redirects
+        run: python3 tools/audit_production_sitemap.py --max-seconds 420 --output "$RUNNER_TEMP/production-seo-audit.json"
+      - name: Retain the actual HTTP audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-seo-audit
+          path: ${{ runner.temp }}/production-seo-audit.json
+          if-no-files-found: error
+          retention-days: 30
