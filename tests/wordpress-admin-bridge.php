@@ -10,6 +10,7 @@ $GLOBALS['fixture'] = array(
     'styles' => array(), 'scripts' => array(), 'inline' => array(), 'localized' => array(),
     'queries' => array(), 'wp_queries' => array(), 'counts' => array(), 'edit_links' => array(), 'nonce_actions' => array(),
     'transients' => array(),
+    'filters' => array(), 'users' => array(), 'posts' => array(),
 );
 
 class FixtureDenied extends RuntimeException {}
@@ -20,6 +21,17 @@ function current_user_can($cap, ...$args) {
 function add_action($hook, $callback, $priority = 10, $accepted_args = 1) {
     $GLOBALS['fixture']['actions'][$hook][] = $callback;
 }
+function add_filter($hook, $callback, $priority = 10, $accepted_args = 1) {
+    $GLOBALS['fixture']['filters'][$hook][] = compact('callback', 'priority', 'accepted_args');
+}
+class FixtureMediaUser {
+    public $roles;
+    public $caps;
+    public function __construct($roles, $caps) { $this->roles = $roles; $this->caps = $caps; }
+    public function has_cap($cap) { return !empty($this->caps[$cap]); }
+}
+function get_userdata($id) { return $GLOBALS['fixture']['users'][(int) $id] ?? false; }
+function get_post($id) { return $GLOBALS['fixture']['posts'][(int) $id] ?? null; }
 function register_activation_hook($file, $callback) { $GLOBALS['fixture']['activation'] = $callback; }
 function add_menu_page($title, $menu, $cap, $slug, $callback = '', $icon = '', $position = null) {
     $hook = 'toplevel_page_' . $slug;
@@ -238,4 +250,36 @@ if ($no_woo) {
         expect(!array_key_exists('author', $count_query), 'broader product capability permits scoped aggregate counts');
     }
 }
+// The media REST controller asks edit_post for an attachment. A product operator
+// must pass that check for owned media without gaining the edit_posts primitive.
+$media_role = 'apt_growth_product_operator';
+$service = new FixtureMediaUser(array($media_role), array('upload_files' => true, 'edit_products' => true));
+$GLOBALS['fixture']['users'][71] = $service;
+$GLOBALS['fixture']['posts'][10] = (object) array('post_type' => 'attachment', 'post_status' => 'inherit', 'post_author' => 71);
+$GLOBALS['fixture']['posts'][20] = (object) array('post_type' => 'attachment', 'post_status' => 'inherit', 'post_author' => 72);
+$GLOBALS['fixture']['posts'][30] = (object) array('post_type' => 'post', 'post_status' => 'publish', 'post_author' => 71);
+$GLOBALS['fixture']['posts'][40] = (object) array('post_type' => 'page', 'post_status' => 'publish', 'post_author' => 71);
+$GLOBALS['fixture']['posts'][50] = (object) array('post_type' => 'product', 'post_status' => 'publish', 'post_author' => 71);
+$GLOBALS['fixture']['posts'][60] = (object) array('post_type' => 'attachment', 'post_status' => 'trash', 'post_author' => 71);
+$mapped = invoke_plugin('own_product_media_capabilities', array('edit_posts'), 'edit_post', 71, array(10));
+expect($mapped === array('upload_files') && $service->has_cap($mapped[0]), 'owned attachment edit passes using the existing upload permission');
+expect(!$service->has_cap('edit_posts') && !isset(invoke_plugin('role_capabilities')['edit_posts']), 'article edit primitive is never granted');
+expect(invoke_plugin('own_product_media_capabilities', array('edit_posts'), 'edit_post', 71, array('10')) === array('upload_files'), 'native numeric attachment ID is supported');
+foreach (array(20, 30, 40, 50, 60, 999) as $id) {
+    expect(invoke_plugin('own_product_media_capabilities', array('edit_posts'), 'edit_post', 71, array($id)) === array('edit_posts'), 'foreign media, article, page, product, trash and missing objects keep prior capabilities');
+}
+expect(invoke_plugin('own_product_media_capabilities', array('delete_posts'), 'delete_post', 71, array(10)) === array('delete_posts'), 'attachment deletion is not granted');
+expect(invoke_plugin('own_product_media_capabilities', array('do_not_allow'), 'edit_post', 71, array(10)) === array('do_not_allow'), 'an explicit deny remains effective');
+foreach (array(array(), array(0), array(-1), array(true), array('10 OR 1=1')) as $args) {
+    expect(invoke_plugin('own_product_media_capabilities', array('edit_posts'), 'edit_post', 71, $args) === array('edit_posts'), 'invalid attachment IDs do not grant permission');
+}
+foreach (array('upload_files', 'edit_products') as $cap) {
+    $service->caps[$cap] = false;
+    expect(invoke_plugin('own_product_media_capabilities', array('edit_posts'), 'edit_post', 71, array(10)) === array('edit_posts'), 'revoked upload or product permission remains effective');
+    $service->caps[$cap] = true;
+}
+$service->roles = array('subscriber');
+expect(invoke_plugin('own_product_media_capabilities', array('edit_posts'), 'edit_post', 71, array(10)) === array('edit_posts'), 'other roles do not receive the media exception');
+$filters = $GLOBALS['fixture']['filters']['map_meta_cap'] ?? array();
+expect(count($filters) === 1 && $filters[0]['accepted_args'] === 4 && $filters[0]['priority'] === 10, 'the narrow rule is registered as a four-argument WordPress capability filter');
 echo json_encode(array('status' => 'passed', 'checks' => $checks, 'fixture' => $no_woo ? 'woo_missing' : 'woo_enabled', 'production_wordpress_activation_tested' => false), JSON_UNESCAPED_UNICODE) . "\n";

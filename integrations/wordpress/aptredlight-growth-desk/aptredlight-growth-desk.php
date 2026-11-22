@@ -2,7 +2,7 @@
 /**
  * Plugin Name: APTREDLIGHT Growth Desk Bridge
  * Description: Product-only WordPress administration and private Growth Desk navigation. Preserves the existing storefront.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION      = '1.0.0';
+const VERSION      = '1.0.1';
 const MENU_SLUG    = 'apt-growth-desk';
 const CLOUD_ORIGIN = 'https://aptredlight-growth-desk.wk20230211.chatgpt.site';
 const ROLE_SLUG    = 'apt_growth_product_operator';
@@ -49,6 +49,31 @@ function activate() {
 		return;
 	}
 	add_role( ROLE_SLUG, 'APT 产品运营（仅商品）', role_capabilities() );
+}
+
+/** Permit product operators to edit their own media without article privileges. */
+function own_product_media_capabilities( $caps, $cap, $user_id, $args ) {
+	if ( 'edit_post' !== $cap || in_array( 'do_not_allow', $caps, true ) || empty( $args ) ) {
+		return $caps;
+	}
+	if ( ! is_int( $args[0] ) && ! is_string( $args[0] ) ) {
+		return $caps;
+	}
+	$post_id = filter_var( $args[0], FILTER_VALIDATE_INT, array( 'options' => array( 'min_range' => 1 ) ) );
+	if ( false === $post_id || (int) $user_id < 1 ) {
+		return $caps;
+	}
+	$user = get_userdata( $user_id );
+	if ( ! $user || ! in_array( ROLE_SLUG, (array) $user->roles, true ) ||
+		! $user->has_cap( 'upload_files' ) || ! $user->has_cap( 'edit_products' ) ) {
+		return $caps;
+	}
+	$post = get_post( $post_id );
+	if ( ! $post || 'attachment' !== $post->post_type || 'trash' === $post->post_status ||
+		(int) $post->post_author !== (int) $user_id ) {
+		return $caps;
+	}
+	return array( 'upload_files' );
 }
 
 /** Server-owned destinations only; this is navigation, not a credential proxy. */
@@ -243,3 +268,4 @@ function render_page() {
 register_activation_hook( __FILE__, __NAMESPACE__ . '\\activate' );
 add_action( 'admin_menu', __NAMESPACE__ . '\\register_menu' );
 add_action( 'admin_enqueue_scripts', __NAMESPACE__ . '\\enqueue_assets' );
+add_filter( 'map_meta_cap', __NAMESPACE__ . '\\own_product_media_capabilities', 10, 4 );

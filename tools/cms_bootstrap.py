@@ -32,7 +32,7 @@ URL = 'https://www.aptredlight.com/cms'
 SLUG = 'aptredlight-growth-desk'
 WPCLI_SHA512 = 'be928f6b8ca1e8dfb9d2f4b75a13aa4aee0896f8a9a0a1c45cd5d2c98605e6172e6d014dda2e27f88c98befc16c040cbb2bd1bfa121510ea5cdf5f6a30fe8832'
 PLUGIN_HASHES = {
-    'aptredlight-growth-desk.php':'7088665080448f3ac067f57d8da0c64333b608bf28a0bc6f23247c48e7bb71e6',
+    'aptredlight-growth-desk.php':'a93c5d2070645fe5524c99881b3649a8779e0b808e7a263cf05948783a6553ae',
     'assets/admin.js':'3bd7db991a3f078ebc272fc61f38ab677edc53104acd0ceba8fe88b538cf7333',
     'assets/admin.css':'0c12db3a032d044b488b378e90404dbd798b2d63909ec4ff5be681d3f7d10804',
     'readme.txt':'866b197329878c1a8c540671f1908e322f1d8903e4bcadb7a17ea098cfa298b5',
