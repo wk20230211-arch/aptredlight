@@ -449,7 +449,11 @@ def main():
     try:
         bundle=Path(args.bundle_dir);wp_cli=Path(args.wp_cli);receipt=Path(args.receipt)
         for path in (bundle,wp_cli,receipt):
-            if not path.is_absolute() or PRIVATE not in path.parents or not safe_chain(path):raise BootstrapError('private_path_scope_rejected')
+            if (not path.is_absolute() or '..' in path.parts or
+                    PRIVATE not in path.resolve(strict=False).parents or not safe_chain(path)):
+                raise BootstrapError('private_path_scope_rejected')
+        if PRIVATE/'staging' not in bundle.parents or PRIVATE/'receipts' not in receipt.parents:
+            raise BootstrapError('private_path_scope_rejected')
         raw=sys.stdin.buffer.read(32769)
         if len(raw)>32768:raise BootstrapError('input_over_limit')
         config=json.loads(raw);valid_input(config)
