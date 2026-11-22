@@ -1,0 +1,60 @@
+#aptgd-root{--aptgd-ink:#0f172a;--aptgd-blue:#2563eb;--aptgd-line:#e2e8f0;--aptgd-muted:#475569;max-width:1480px;color:var(--aptgd-ink);font-family:Inter,"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;font-size:16px;line-height:1.6;margin:20px 22px 36px 0}
+#aptgd-root *{box-sizing:border-box}
+#aptgd-root h1,#aptgd-root h2,#aptgd-root h3,#aptgd-root p{padding:0}
+#aptgd-root h1{font-size:clamp(1.7rem,3vw,2.3rem);line-height:1.3;font-weight:750;margin:6px 0 12px;color:inherit}
+#aptgd-root h2{font-size:1.2rem;line-height:1.4;margin:0 0 5px;font-weight:700}
+#aptgd-root h3{font-size:1rem;line-height:1.5}
+#aptgd-root p{font-size:1rem;line-height:1.6;margin:0 0 10px}
+#aptgd-root a{color:#1d4ed8;text-underline-offset:3px}
+#aptgd-root a:focus-visible,#aptgd-root button:focus-visible{outline:3px solid #60a5fa;outline-offset:3px}
+#aptgd-root .aptgd-header{display:flex;justify-content:space-between;align-items:center;gap:28px;background:#0f172a;color:#fff;padding:28px 30px;border-radius:14px;border-top:4px solid #2563eb}
+#aptgd-root .aptgd-header p{max-width:760px;margin:0;color:#cbd5e1}
+#aptgd-root .aptgd-header .aptgd-eyebrow{font-size:.875rem;font-weight:700;letter-spacing:.06em;color:#93c5fd}
+#aptgd-root .aptgd-button{display:inline-flex;justify-content:center;align-items:center;min-height:44px;padding:9px 15px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#1e3a8a;text-decoration:none;font:inherit;font-weight:600;font-size:.9375rem;line-height:1.5;cursor:pointer;white-space:normal;text-align:center}
+#aptgd-root .aptgd-button:hover{border-color:#2563eb;background:#eff6ff;color:#1e40af}
+#aptgd-root .aptgd-button-primary{background:#2563eb;border-color:#2563eb;color:#fff}
+#aptgd-root .aptgd-button-primary:hover{background:#1d4ed8;color:#fff}
+#aptgd-root .aptgd-button-light{background:#fff;color:#1e3a8a;flex-shrink:0}
+#aptgd-root button:disabled{cursor:not-allowed;opacity:.55}
+#aptgd-root .aptgd-alert{padding:16px 20px;margin:18px 0;border:1px solid #bfdbfe;border-left:4px solid #2563eb;border-radius:8px;background:#eff6ff}
+#aptgd-root .aptgd-alert p{font-size:.9375rem;color:#334155;margin:4px 0 0}
+#aptgd-root .aptgd-alert-warning{background:#fffbeb;border-color:#fcd34d;border-left-color:#d97706}
+#aptgd-root .aptgd-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:20px 0}
+#aptgd-root .aptgd-stats article{background:#fff;padding:20px;border:1px solid var(--aptgd-line);border-radius:10px;display:flex;flex-direction:column;gap:4px}
+#aptgd-root .aptgd-stats article>span{font-size:.9375rem;color:var(--aptgd-muted)}
+#aptgd-root .aptgd-stats strong{font-size:2rem;line-height:1.4}
+#aptgd-root .aptgd-stats .aptgd-stat-text{font-size:1.15rem;min-height:2.8rem;display:flex;align-items:center}
+#aptgd-root small{font-size:.875rem;line-height:1.6;color:var(--aptgd-muted)}
+#aptgd-root .aptgd-main-grid{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(250px,1fr);gap:18px;align-items:start}
+#aptgd-root .aptgd-panel{background:#fff;border:1px solid var(--aptgd-line);border-radius:12px;margin:18px 0;overflow:hidden}
+#aptgd-root .aptgd-main-grid>.aptgd-panel{margin:0}
+#aptgd-root .aptgd-panel-head{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:22px 22px 16px;border-bottom:1px solid #f1f5f9}
+#aptgd-root .aptgd-panel-head p{font-size:.9375rem;color:var(--aptgd-muted);margin:0}
+#aptgd-root .aptgd-table-wrap{max-width:100%;overflow:auto}
+#aptgd-root table{border-collapse:collapse;width:100%;font-size:.9375rem}
+#aptgd-root th,#aptgd-root td{text-align:left;padding:13px 16px;border-bottom:1px solid #e2e8f0;vertical-align:top;overflow-wrap:anywhere}
+#aptgd-root th{color:#475569;background:#f8fafc;font-weight:650;white-space:nowrap}
+#aptgd-root tr:last-child td{border-bottom:0}
+#aptgd-root .aptgd-mono{font-family:Consolas,monospace;font-size:.875rem}
+#aptgd-root .aptgd-tag{display:inline-block;padding:2px 8px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:5px;font-size:.875rem;white-space:nowrap}
+#aptgd-root .aptgd-empty{padding:24px;color:#475569;margin:0}
+#aptgd-root .aptgd-side-actions{display:grid;gap:10px;padding:20px 22px 8px}
+#aptgd-root .aptgd-checklist{font-size:.9375rem;color:#475569;padding:0 24px 14px 42px;margin:10px 0}
+#aptgd-root .aptgd-checklist li{padding:4px 0}
+#aptgd-root .aptgd-rest-result{padding:20px 22px}
+#aptgd-root .aptgd-rest-result>p{font-size:.9375rem;color:#475569}
+#aptgd-root .aptgd-rest-result .aptgd-success{font-weight:700;color:#047857}
+#aptgd-root .aptgd-rest-result .aptgd-error{font-weight:650;color:#b45309}
+#aptgd-root .aptgd-rest-result .aptgd-stale{background:#fffbeb;padding:10px 12px;border-radius:5px}
+#aptgd-root .aptgd-group-title{margin:18px 22px 10px;color:#334155}
+#aptgd-root .aptgd-module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:0 22px 18px}
+#aptgd-root .aptgd-module{display:flex;flex-direction:column;gap:4px;padding:16px;border:1px solid var(--aptgd-line);border-radius:8px;text-decoration:none;background:#fff;min-height:126px}
+#aptgd-root .aptgd-module:hover{background:#f8fafc;border-color:#93c5fd}
+#aptgd-root .aptgd-module strong{font-size:1rem;line-height:1.5;color:#0f172a}
+#aptgd-root .aptgd-module>span{font-size:.9375rem;color:#475569}
+#aptgd-root .aptgd-module small{margin-top:auto;color:#1d4ed8}
+#aptgd-root .aptgd-footer{font-size:.875rem;color:#64748b;padding:3px 0 20px;display:flex;align-items:start;justify-content:space-between;gap:20px}
+#aptgd-root .aptgd-footer p{font-size:.875rem;max-width:900px}
+@media(max-width:1200px){#aptgd-root .aptgd-stats{grid-template-columns:repeat(2,minmax(0,1fr))}#aptgd-root .aptgd-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#aptgd-root .aptgd-main-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:700px){#aptgd-root{margin:12px 12px 24px 0}#aptgd-root .aptgd-header,#aptgd-root .aptgd-panel-head,#aptgd-root .aptgd-footer{flex-direction:column;align-items:stretch}#aptgd-root .aptgd-header{padding:22px 20px}#aptgd-root .aptgd-module-grid{grid-template-columns:1fr;padding-right:16px;padding-left:16px}#aptgd-root .aptgd-stats{gap:10px}#aptgd-root .aptgd-stats article{padding:14px}#aptgd-root .aptgd-panel-head{padding:18px 16px}#aptgd-root .aptgd-header .aptgd-button{width:100%}#aptgd-root th,#aptgd-root td{padding:11px 12px}}
+@media(prefers-reduced-motion:reduce){#aptgd-root *{scroll-behavior:auto}}

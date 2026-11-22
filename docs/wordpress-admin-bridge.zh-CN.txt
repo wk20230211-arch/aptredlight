@@ -1,0 +1,136 @@
+APTREDLIGHT · WordPress 原生后台与云端工作台联动手册
+交付日期：2026-11-22（上海时区）
+
+一、当前状态与交付范围
+
+本次交付的是可安装的 WordPress 后台集成插件、验证代码及本手册。插件在现有 WordPress 左侧增加 APTREDLIGHT 运营工作台，显示真实 WooCommerce 商品统计及最近商品，提供原生商品编辑、添加商品和媒体入口，并连接既有私有云工作台各模块。
+
+这套插件不更换主题、不改写正式前台、不导入示例商品、不迁移订单或客户数据，不把 ERP、询盘及运营记录复制进 WordPress。云端工作台与 WordPress 分别认证；WordPress 角色不自动取得云端查看或编辑权限。云端页面以固定链接打开，不通过 iframe 携带登录状态，也不向 WordPress 页面注入云端服务令牌。
+
+目前不能把“插件已生成”写成“原站已经安装并接通”。只读诊断在 2026-11-22 检查到：
+1. www.aptredlight.com 的 WordPress REST、WooCommerce 产品、Store API 及 index.php?rest_route=/ 四个入口均返回 404 HTML。
+2. 已知正式 public_html 根目录及其 wp、wordpress 两个子目录未发现 WordPress 安装标记；正式根 index.html 存在。这个检查不能证明其他账号或其他目录也没有 WordPress。
+3. 当前 Hostinger Connector 可见的网站及 WordPress 安装为空，尚未取得原后台的可用记录。
+
+诊断证据：
+https://github.com/wk20230211-arch/aptredlight/actions/runs/45008728770
+
+站主已选择接回已有 WordPress 后台，不新建或重装。应先切换到确实能看到原后台的 Hostinger 托管账号，再确认安装位置。不能在当前静态正式站根目录解压 WordPress、覆盖 index.html、改写重定向或切换主题来假装接通。
+
+二、管理员安装前检查
+
+1. 在正确 Hostinger 账号的“网站”列表中确认原 WordPress 安装，而非只在“域名”列表中看到域名。
+2. 记录实际 WordPress 后台和 REST 地址，确认不是当前静态展示层的 404 页面。以能读取 WordPress JSON 为准。
+3. 备份该 WordPress 的数据库和 wp-content，并记录备份时间及恢复位置。备份中包含的秘密不能上传到聊天、公开仓库或公共报告。
+4. 确认既有 WooCommerce 已启用，检查原有商品、主题、页面及主要采购路径正常。插件不会代为安装或启用 WooCommerce。
+5. 检查当前 WordPress、WooCommerce 与 PHP 版本兼容性。隔离 fixture 和语法检查不替代真实 WordPress 激活测试。
+
+三、安装插件并验证入口
+
+1. 以原 WordPress 管理员登录后台。
+2. 进入“插件 → 安装插件 → 上传插件”，选择交付的 APTREDLIGHT 后台插件 ZIP。
+3. 核对插件目录为 aptredlight-growth-desk，使用 WordPress 的安装流程；不要手动覆盖现有主题、其他插件或正式站根目录。
+4. 激活插件。若 WooCommerce 未就绪或平台提示依赖未满足，保持未就绪状态，先核对原安装，不要重装原站。
+5. 在左侧查找 APTREDLIGHT 运营工作台。只有具备产品编辑能力的账号可以打开该页面。
+6. 核对商品统计与最近商品来自现有 WooCommerce。没有读取成功时不得用示例或猜测数值填充。
+7. 打开一件已知商品的原生编辑页，确认标题、SKU、图片和状态保持原样；这一步无需保存商品。
+8. 测试“只读读取前 10 个商品”，核对 ID、标题、SKU 及状态。授权成功的空数组才代表读通且本次查询没有商品；404、HTML、401、403 和超时均不能记成“0 个商品”。
+
+安装本身不会替用户保存商品，也不会向订单、站点设置、插件、主题或用户管理接口发起变更。
+
+四、账号与权限配置
+
+WordPress 与云端工作台有两层权限，需分别完成。
+
+WordPress 侧：
+• 插件仅在缺失时新增 apt_growth_product_operator 专用产品运营角色。同名角色已经存在时不修改其能力，需管理员先审查。
+• 为运营建立专用 WordPress 用户，仅分配经审核的产品角色。不要同时赋予管理员或其他会扩大权限的角色，也要检查额外的用户级能力。
+• 该角色用于产品维护、产品词条和媒体上传；不赋予 manage_options、manage_woocommerce 或订单、主题、插件、用户管理能力。
+• manage_product_terms 可能同时允许 WooCommerce 原生产品属性管理，不能把它描述成严格只读词条权限。
+• WordPress 原生产品删除能力本身可能允许永久删除。云端产品服务另外强制 force=false，只允许移入回收站；不要把云端限制误认为所有 WordPress 原生页面都有同样限制。
+• 使用运营账号实际验证：产品相关入口可按分配能力使用，订单、站点设置、插件、主题与用户管理必须被拒绝。插件代码和 fixture 不能替代此项实际验收。
+
+云端侧：
+• 既有工作台第 15 版已交付 WooCommerce REST 产品管理服务与界面；其真实连接仍需实际后台、凭据和身份白名单。
+• 每位用户登录云端工作台，在 WordPress 商品管理模块复制自己的 Site 用户 ID。由管理员安全配置 WOO_ADMIN_USER_IDS 或 WOO_OPERATOR_USER_IDS。
+• 该 ID 不是密码，但必须使用平台提供的实际站内身份。不能把第一个访问者自动升为管理员，不能把前端传来的 role 字段或 WordPress 用户名当成云端授权。
+• 服务访问令牌不代表某个运营人员身份，不能用于代签商品写入审计。
+
+五、连接凭据与写入门槛
+
+1. WooCommerce 产品 API 使用专用 Consumer key／Consumer secret，权限继承关联 WordPress 用户。媒体上传单独使用 WP 用户名及 Application Password；不能假定 WooCommerce 密钥可用于 wp/v2/media。
+2. 凭据只放在服务端运行时 Secret。不要粘贴到聊天、前端代码、公开 GitHub、操作日志、下载包或截图中。
+3. 在云端安全绑定实际后台地址、专用产品凭据、媒体凭据和 Site 身份白名单。保留原有其他环境配置。
+4. 管理员点击只读连接测试，读取真实前 10 个商品并保存回执。配置或凭据改变后需重新测试，不能沿用旧配置的成功记录。
+5. 站主已明确授权开启产品写入开关。WOO_WRITE_ENABLED 是否已生效，以当前运行时状态为准；开关为 true 只表示写入功能获准使用，不代替身份、凭据及只读回执验证。
+6. 未通过任一门槛时保持操作受阻状态。不能为了让按钮可用，把所有工作台访客设为管理员或绕过接口校验。
+7. WordPress 原生后台中的只读检查使用本域登录 Cookie 与动态 X-WP-Nonce；这不是跨域云端产品服务的 API 凭据，不能复制到云端长期使用。
+
+六、日常产品操作
+
+在 WordPress 原生后台：
+1. 从 APTREDLIGHT 运营工作台查看真实商品及状态。
+2. 点击具备权限的商品编辑链接，进入现有 WooCommerce 编辑页。
+3. 使用 WooCommerce 原生字段维护产品；激活插件不会重建既有商品。
+4. 修改前核对当前 SKU、市场、规格证据及图片版本，保存后回到商品页复核。
+
+在云端 WordPress 商品管理：
+1. 刷新商品列表或打开编辑详情，取得 WordPress 当前数据。
+2. 新增时填写唯一 SKU，选择草稿或发布状态，并填写经过核验的参数。
+3. 主图和附图先上传到 WP 媒体库，使用上传回执 ID 关联商品。不要直接提交外链作为上传成功。
+4. 保存后核对服务器回执及回读数据，检查图片顺序、SKU、价格、库存及状态。
+5. 首版仅写入简单商品。已有 variable、grouped、external 商品保持只读，避免用简单表单覆盖变体或其他结构。
+6. 删除仅通过明确确认后移入回收站，不使用 force=true。
+7. 当前双向联动是“刷新读取 WordPress + 保存后回读”，不是 WordPress webhook 自动推送。WordPress 后台修改后，云端用户需刷新再编辑。
+8. 写入 WooCommerce 不等于现有静态前台立即生成新商品页。正式前台的数据源和商品路由需要单独联调，不能为展示新商品而覆盖旧主题或全站结构。
+
+七、固定云端模块入口
+
+以下入口仍需原云端账号及其权限，不因 WordPress 登录而自动放行：
+
+WordPress 商品管理：
+https://aptredlight-growth-desk.wk20230211.chatgpt.site/#wooProducts
+
+产品资料库：
+https://aptredlight-growth-desk.wk20230211.chatgpt.site/#productsLibrary
+
+图库与视频：
+https://aptredlight-growth-desk.wk20230211.chatgpt.site/#assetsLibrary
+
+证书管理：
+https://aptredlight-growth-desk.wk20230211.chatgpt.site/#certificatesLibrary
+
+执行路线图：
+https://aptredlight-growth-desk.wk20230211.chatgpt.site/#growthExecution
+
+GEO 品牌运营官：
+https://aptredlight-growth-desk.wk20230211.chatgpt.site/#geoBrandOfficer
+
+客户成交全链路 ERP：
+https://aptredlight-growth-desk.wk20230211.chatgpt.site/#erpPipeline
+
+GA4 网站统计：
+https://aptredlight-growth-desk.wk20230211.chatgpt.site/#ga4Analytics
+
+建设规范与验收：
+https://aptredlight-growth-desk.wk20230211.chatgpt.site/#standardsLibrary
+
+八、失败与未知结果处理
+
+• 401／403：先核对登录、Site 身份白名单、WP 专用用户能力和 API 凭据。不要扩大成全站管理员权限来消除报错。
+• 404／HTML：核对实际 WordPress 安装位置和 REST 路由，保留静态前台不变。
+• 409：可能是 SKU、重复请求或乐观版本冲突。保留草稿，读取后台最新数据后人工核对；不要连续点击保存。
+• 超时、连接中断、上传后回读失败：结果未知不等于操作失败。先核对 WordPress 商品、媒体库和原请求日志，禁止自动重放。
+• 已上传图片但商品保存失败：保留媒体回执 ID 供重用，不自动删除真实附件，也不要重复上传同一批文件。
+• 审计记录失败或未知请求锁保留：暂停相关写入，由管理员核对上游状态后处理。解除本页暂停不代表服务器未知锁已经自动解除。
+• 云端模块无法打开：在新顶层页面完成原云端登录，不把私有服务令牌放进 URL 或 iframe 绕过认证。
+
+九、回滚、停用与验收记录
+
+发现插件冲突时，可先在 WordPress“插件”中停用本插件，并按安装前记录检查商品、主题、页面及采购路径。必要时使用已核验的备份恢复，恢复前确认备份范围及其后的真实业务变更。
+
+停用或卸载本插件不会迁移、删除商品，也不自动移除专用角色或修改既有角色分配。若确需移除角色，管理员应先核对所有用户的角色及额外能力，再单独处理；不能把停用插件当作撤销所有用户权限。
+
+每次实际安装或联调应记录：目标后台地址、插件版本、操作者、备份时间、只读前 10 读取结果、角色正向及拒绝测试、具体写入目标、回读结果和失败处置。严禁把密码、API Secret、完整客户资料写进验收记录。
+
+交付中的 fixture、静态检查或 PHP 语法检查只证明对应测试范围。实际 WordPress 激活、真实商品读写、媒体上传、角色拒绝及前台展示必须分别验收；未完成项目保持待验收。

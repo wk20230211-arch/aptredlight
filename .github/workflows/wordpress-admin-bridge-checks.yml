@@ -1,0 +1,57 @@
+name: Validate WordPress admin bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/wordpress/aptredlight-growth-desk/**'
+      - 'tests/wordpress-admin-bridge.php'
+      - '.github/workflows/wordpress-admin-bridge-checks.yml'
+  pull_request:
+    paths:
+      - 'integrations/wordpress/aptredlight-growth-desk/**'
+      - 'tests/wordpress-admin-bridge.php'
+      - '.github/workflows/wordpress-admin-bridge-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check PHP and JavaScript syntax
+        run: |
+          php -v
+          php -l integrations/wordpress/aptredlight-growth-desk/aptredlight-growth-desk.php
+          php -l tests/wordpress-admin-bridge.php
+          node --check integrations/wordpress/aptredlight-growth-desk/assets/admin.js
+      - name: Exercise capability checks, escaping, hooks and existing roles
+        run: |
+          php tests/wordpress-admin-bridge.php integrations/wordpress/aptredlight-growth-desk
+          php tests/wordpress-admin-bridge.php integrations/wordpress/aptredlight-growth-desk --no-woo
+      - name: Package only plugin files, without credentials or runtime data
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,zipfile
+          root=pathlib.Path('integrations/wordpress/aptredlight-growth-desk')
+          names=['aptredlight-growth-desk.php','assets/admin.js','assets/admin.css','readme.txt','README.zh-CN.txt']
+          output=pathlib.Path(os.environ['RUNNER_TEMP'],'aptredlight-growth-desk-wp-plugin.zip')
+          with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:
+              for name in names:
+                  file=root/name
+                  assert file.is_file() and not file.is_symlink(), 'Missing or unsafe plugin file'
+                  archive.write(file,'aptredlight-growth-desk/'+name)
+          print('Plugin source packaged. No production WordPress installation or activation was attempted.')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aptredlight-growth-desk-wordpress-plugin
+          path: ${{ runner.temp }}/aptredlight-growth-desk-wp-plugin.zip
+          if-no-files-found: error
+          retention-days: 30
