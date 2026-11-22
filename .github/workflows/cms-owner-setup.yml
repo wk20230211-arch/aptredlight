@@ -1,10 +1,5 @@
 name: Prepare native WordPress owner setup
 'on':
-  push:
-    branches:
-    - main
-    paths:
-    - .github/workflows/cms-owner-setup.yml
   workflow_dispatch: null
 permissions:
   contents: read
