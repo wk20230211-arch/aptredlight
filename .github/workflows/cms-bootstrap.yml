@@ -110,6 +110,8 @@ jobs:
           PY
             exit 1
           fi
+      - name: Prepare a private administrator contact channel (public key only)
+        run: python3 tools/prepare_cms_contact.py --known-hosts "$RUNNER_TEMP/cms-known-hosts"
       - name: Install only into an empty CMS directory and an empty dedicated MySQL database
         env:
           APTREDLIGHT_CMS_DATABASE: ${{ secrets.APTREDLIGHT_CMS_DATABASE }}
