@@ -1,0 +1,198 @@
+name: Install verified APT WordPress admin bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/install-wordpress-admin-bridge.yml'
+      - 'tools/wordpress_plugin_installer.py'
+      - 'tools/test_wordpress_plugin_installer.py'
+  pull_request:
+    paths:
+      - '.github/workflows/install-wordpress-admin-bridge.yml'
+      - 'tools/wordpress_plugin_installer.py'
+      - 'tools/test_wordpress_plugin_installer.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aptredlight-wordpress-plugin-install
+  cancel-in-progress: false
+
+jobs:
+  validate-installer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Exercise installation guards and rollback in temporary fixtures
+        run: python3 tools/test_wordpress_plugin_installer.py
+      - name: Check installer syntax
+        run: python3 -m py_compile tools/wordpress_plugin_installer.py
+
+  install:
+    needs: validate-installer
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Start an installation receipt without changing the website
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,pathlib
+          report={'schema':1,'checked_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                  'operation':'install_verified_wordpress_plugin','status':'pending',
+                  'ssh_identity':{'status':'not_run'},'remote':{'status':'not_run'},
+                  'source_commit':'b9e37cc02f25da1b1a5b9cc3dba0bc2aa49f3e08',
+                  'production_product_write_performed':False}
+          pathlib.Path(os.environ['RUNNER_TEMP'],'wordpress-plugin-installation.json').write_text(json.dumps(report,indent=2)+'\n')
+          PY
+      - name: Resolve fixed hosting target and verify its pinned ED25519 key
+        env:
+          HOSTINGER_SSH_HOST: ${{ vars.HOSTINGER_SSH_HOST }}
+          HOSTINGER_SSH_PORT: ${{ vars.HOSTINGER_SSH_PORT }}
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, pathlib, subprocess, sys
+          sys.path.insert(0, 'tools')
+          from verify_hostinger_identity import read_config, valid_host, valid_port, verify, write_receipt
+          receipt_path = pathlib.Path(os.environ['RUNNER_TEMP'], 'wordpress-plugin-installation.json')
+          report = json.loads(receipt_path.read_text(encoding='utf-8'))
+          try:
+              config = read_config(pathlib.Path('.hostinger/deploy.json').resolve())
+              host = valid_host((os.environ.get('HOSTINGER_SSH_HOST') or config['ssh_host']).strip())
+              port = valid_port(int(os.environ.get('HOSTINGER_SSH_PORT') or config['ssh_port']))
+              if config['ssh_user'] != 'u469397229' or config['web_root'] != '/home/u469397229/domains/aptredlight.com/public_html':
+                  raise ValueError('fixed_scope_mismatch')
+              result = subprocess.run(['ssh-keyscan', '-T', '10', '-p', str(port), '-t', 'ed25519', host],
+                                      capture_output=True, timeout=20, check=False)
+              if result.returncode or len(result.stdout) > 65536:
+                  raise ValueError('keyscan_failed')
+              known_hosts = result.stdout.decode('utf-8')
+              identity = verify(config, known_hosts, host, port)
+              path = pathlib.Path(os.environ['RUNNER_TEMP'], 'wp-readonly-known-hosts')
+              path.write_text(known_hosts, encoding='utf-8')
+              path.chmod(0o600)
+              write_receipt(pathlib.Path(os.environ['RUNNER_TEMP'], 'wp-readonly-identity.json'), identity)
+              report['ssh_identity'] = identity
+              with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as out:
+                  out.write('WP_DIAG_SSH_HOST=' + host + '\nWP_DIAG_SSH_PORT=' + str(port) + '\nWP_DIAG_SSH_USER=u469397229\n')
+          except Exception:
+              report['ssh_identity'] = {'status': 'failed', 'failure_class': 'pinned_identity_not_verified'}
+              receipt_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+              print(json.dumps(report['ssh_identity']))
+              sys.exit(1)
+          receipt_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(identity))
+          PYCODE
+
+      - name: Load the existing deployment key in an ephemeral agent
+        env:
+          HOSTINGER_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          if [ -z "$HOSTINGER_SSH_PRIVATE_KEY" ]; then
+            python3 - <<'PYCODE'
+          import json, os, pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'],'wordpress-plugin-installation.json')
+          r=json.loads(p.read_text());r['remote']={'status':'not_run','failure_class':'deployment_key_missing'}
+          p.write_text(json.dumps(r,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(r['remote']))
+          PYCODE
+            exit 1
+          fi
+          eval "$(ssh-agent -s)" > /dev/null
+          printf 'SSH_AUTH_SOCK=%s\nSSH_AGENT_PID=%s\n' "$SSH_AUTH_SOCK" "$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          if ! printf '%s\n' "$HOSTINGER_SSH_PRIVATE_KEY" | ssh-add - > /dev/null 2>&1; then
+            python3 - <<'PYCODE'
+          import json, os, pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'],'wordpress-plugin-installation.json')
+          r=json.loads(p.read_text());r['remote']={'status':'not_run','failure_class':'deployment_key_not_loadable'}
+          p.write_text(json.dumps(r,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(r['remote']))
+          PYCODE
+            exit 1
+          fi
+
+      - name: Find a unique existing branded WP, then install and activate only the reviewed plugin
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import base64,hashlib,importlib.util,json,os,pathlib,shlex,subprocess,sys
+          module_path=pathlib.Path('tools/wordpress_plugin_installer.py')
+          spec=importlib.util.spec_from_file_location('apt_installer',module_path)
+          installer=importlib.util.module_from_spec(spec);spec.loader.exec_module(installer)
+          root=pathlib.Path('integrations/wordpress/aptredlight-growth-desk')
+          files=[]
+          for name,expected in installer.HASHES.items():
+              source=root/name
+              assert source.is_file() and not source.is_symlink(), 'Reviewed source is missing'
+              data=source.read_bytes()
+              assert hashlib.sha256(data).hexdigest()==expected, 'Source differs from the tested plugin'
+              files.append({'path':name,'sha256':expected,'content_base64':base64.b64encode(data).decode('ascii')})
+          payload={'schema':1,'source_commit':installer.SOURCE_COMMIT,'verified_files':files}
+          installer.valid_files(payload)
+          receipt_path=pathlib.Path(os.environ['RUNNER_TEMP'],'wordpress-plugin-installation.json')
+          report=json.loads(receipt_path.read_text())
+          command='python3 -c '+shlex.quote(module_path.read_text())
+          args=['ssh','-F','/dev/null','-T','-p',os.environ['WP_DIAG_SSH_PORT'],
+                '-o','BatchMode=yes','-o','NumberOfPasswordPrompts=0','-o','ConnectTimeout=15',
+                '-o','ServerAliveInterval=5','-o','ServerAliveCountMax=2',
+                '-o','StrictHostKeyChecking=yes',
+                '-o','UserKnownHostsFile='+str(pathlib.Path(os.environ['RUNNER_TEMP'],'wp-readonly-known-hosts')),
+                '-o','ForwardAgent=no','-o','ClearAllForwardings=yes','-o','PermitLocalCommand=no',
+                '-o','UpdateHostKeys=no','-o','LogLevel=ERROR',
+                os.environ['WP_DIAG_SSH_USER']+'@'+os.environ['WP_DIAG_SSH_HOST'],command]
+          success=False
+          try:
+              result=subprocess.run(args,input=json.dumps(payload).encode(),capture_output=True,timeout=270,check=False)
+              if result.returncode not in (0,3) or len(result.stdout)>262144:
+                  report['remote']={'status':'unknown','reason':'ssh_execution_not_confirmed'}
+              else:
+                  value=json.loads(result.stdout)
+                  assert value.get('source_commit')==installer.SOURCE_COMMIT, 'Receipt source mismatch'
+                  assert value.get('status') in ('installed','activated','already_installed','blocked','failed')
+                  report['remote']=value
+                  success=(result.returncode==0 and value.get('activated') is True and
+                           value.get('status') in ('installed','activated','already_installed'))
+          except subprocess.TimeoutExpired:
+              report['remote']={'status':'unknown','reason':'ssh_timeout_requires_readback'}
+          except Exception:
+              report['remote']={'status':'unknown','reason':'remote_receipt_not_confirmed'}
+          report['status']='installed' if success else report['remote'].get('status','unknown')
+          receipt_path.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(report,ensure_ascii=False))
+          sys.exit(0 if success else 3)
+          PYCODE
+
+      - name: Always remove the ephemeral SSH agent and runner public-key file
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${SSH_AGENT_PID:-}" ]; then
+            ssh-add -D > /dev/null 2>&1 || true
+            ssh-agent -k > /dev/null 2>&1 || true
+          fi
+          rm -f "$RUNNER_TEMP/wp-readonly-known-hosts"
+
+      - name: Retain the real installation or blocked-state receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wordpress-plugin-installation-receipts
+          path: |
+            ${{ runner.temp }}/wordpress-plugin-installation.json
+            ${{ runner.temp }}/wp-readonly-identity.json
+          if-no-files-found: warn
+          retention-days: 7
