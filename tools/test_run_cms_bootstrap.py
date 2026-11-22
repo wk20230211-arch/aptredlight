@@ -236,11 +236,24 @@ class ObservedSecretAndContact(unittest.TestCase):
     def test_observed_engine_port_charset_and_conflicting_aliases_rejected(self):
         values=[self.observed(engine='postgres'),self.observed(port='3306'),self.observed(port=3306.0),
                 self.observed(port=3307),self.observed(charset='latin1'),self.observed(name='u469397229_other'),
-                self.observed(user='u469397229_other'),self.observed(host='external.example')]
+                self.observed(user='u469397229_other')]
         for value in values:
             with self.subTest(fields=list(value)),self.assertRaises(setup.SetupError):setup.database_secret(json.dumps(value))
         raw=json.dumps(self.observed())[:-1]+',"database":"u469397229_other"}'
         with self.assertRaises(setup.SetupError):setup.database_secret(raw)
+
+    def test_hostinger_export_hosts_are_discarded_without_external_connections(self):
+        with mock.patch.object(setup,'child') as child,mock.patch.object(setup.urllib.request,'urlopen') as network:
+            for host in ('example.srv.hstgr.io','45.87.81.210','arbitrary-export.example','localhost','127.0.0.1'):
+                value=setup.database_secret(json.dumps(self.observed(host=host)))
+                self.assertEqual(value['host'],'127.0.0.1')
+            child.assert_not_called();network.assert_not_called()
+        for host in ('','bad\nhost','bad host','https://example.test','user@example.test','example.test/path','example.test?password=x','example.test#fragment'):
+            with self.subTest(host_shape=len(host)),self.assertRaises(setup.SetupError):
+                setup.database_secret(json.dumps(self.observed(host=host)))
+        with self.assertRaises(setup.SetupError):
+            setup.database_secret(json.dumps({'name':'u469397229_fixture','user':'u469397229_fixture',
+                 'password':'Fixture-database-password-123!','host':'example.srv.hstgr.io','admin_email':'fixture@example.test'}))
 
     def test_contact_roundtrip_is_captured_without_printing_email(self):
         email='fixture-owner@example.test'
