@@ -20,14 +20,20 @@ class Gate(Exception):
 def quarantine_failed_core(root, cms, private, receipt, owner_uid):
     report = {'schema': 1, 'status': 'blocked', 'cms_url': 'https://www.aptredlight.com/cms',
               'known_failure_run': '45022484164-1', 'writes_performed': False,
-              'quarantined': False, 'front_preserved': False, 'rollback_available': False}
+              'quarantined': False, 'front_preserved': False, 'rollback_available': False,
+              'cms_data_modified': False, 'lock_created': False}
     lock_fd = None
+    fixed_paths = {}
     def check(ok, code):
         if not ok:
             raise Gate(code)
     def plain(path, kind=None):
         check(not any(p.is_symlink() for p in (path, *path.parents)), 'symlink_refused')
-        info = path.stat()
+        try:
+            info = path.stat()
+        except FileNotFoundError:
+            report['missing_prerequisite'] = fixed_paths.get(path, 'core_tree_entry')
+            raise Gate('required_path_missing') from None
         check(info.st_uid == owner_uid, 'owner_mismatch')
         if kind == 'file':
             check(stat.S_ISREG(info.st_mode), 'regular_file_required')
@@ -53,12 +59,28 @@ def quarantine_failed_core(root, cms, private, receipt, owner_uid):
         root, cms, private, receipt = map(Path, (root, cms, private, receipt))
         check(cms == root/'cms' and receipt == private/'receipts/run-45022484164-1.json', 'fixed_scope_mismatch')
         check(owner_uid == os.getuid(), 'process_owner_mismatch')
+        lock = private/'.bootstrap.lock'
+        fixed_paths = {root:'root',cms:'cms',private:'private',private/'receipts':'receipts',
+                       receipt:'known_receipt',lock:'bootstrap_lock',root/'index.html':'front_index',
+                       root/'.htaccess':'front_htaccess',cms/'.htaccess':'cms_maintenance'}
+        report['prerequisites'] = {label:os.path.lexists(path) for path,label in fixed_paths.items()}
+        for path,label in fixed_paths.items():
+            if label != 'bootstrap_lock' and not report['prerequisites'][label]:
+                report['missing_prerequisite'] = label
+                raise Gate('required_path_missing')
         for path in (root, cms, private, private/'receipts'):
             plain(path, 'dir')
         check((private.stat().st_mode & 0o777) == 0o700, 'private_directory_not_700')
-        lock = private/'.bootstrap.lock'
+        if not os.path.lexists(lock):
+            try:
+                lock_fd = os.open(lock, os.O_RDWR | os.O_NOFOLLOW | os.O_CREAT | os.O_EXCL, 0o600)
+                report.update(writes_performed=True, lock_created=True)
+            except FileExistsError:
+                # Another trusted invocation created the same shared lock.
+                pass
         plain(lock, 'file')
-        lock_fd = os.open(lock, os.O_RDWR | os.O_NOFOLLOW)
+        if lock_fd is None:
+            lock_fd = os.open(lock, os.O_RDWR | os.O_NOFOLLOW)
         check(os.fstat(lock_fd).st_uid == owner_uid, 'lock_owner_mismatch')
         try:
             fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -107,7 +129,7 @@ def quarantine_failed_core(root, cms, private, receipt, owner_uid):
             report['writes_performed'] = True
         check(not os.path.lexists(destination), 'quarantine_destination_exists')
         os.rename(cms, destination)
-        report.update(writes_performed=True, quarantined=True, rollback_available=True)
+        report.update(writes_performed=True, quarantined=True, rollback_available=True, cms_data_modified=True)
         destination.chmod(0o700)
         report['front_preserved'] = front_hashes() == before
         check(report['front_preserved'], 'frontend_changed_during_quarantine')
