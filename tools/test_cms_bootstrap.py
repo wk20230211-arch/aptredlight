@@ -2,12 +2,14 @@
 import base64
 import copy
 import hashlib
+import io
 import importlib.util
 import json
 from pathlib import Path
 import shutil
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 SPEC=importlib.util.spec_from_file_location('cms_bootstrap',Path(__file__).with_name('cms_bootstrap.py'))
@@ -28,13 +30,16 @@ class FakeBackend:
         return {'algorithm':'RSA-OAEP-SHA256+AES-256-CBC-PBKDF2-SHA256+HMAC-SHA256','iterations':200000,'salt_length':8,'wrapped_key_b64':base64.b64encode(b'w'*384).decode(),'ciphertext_b64':base64.b64encode(b'Salted__'+b'x'*40).decode(),'hmac_sha256':'1'*64}
     def health(self,url,nonce):return {'apt_php_probe':nonce,'version':'8.2.29','extensions':self.extensions} if self.web_ready else None
     def http_status(self,url):return self.lock_status
+    def download_core(self,target,version):
+        self.calls.append((['core','download','--version='+version],'core_download',None))
+        if self.fail_step=='core_download':raise cms.BootstrapError('core_download_failed')
+        (target/'wp-content/plugins').mkdir(parents=True)
+        (target/'wp-admin').mkdir()
+        (target/'index.php').write_text('<?php /* fixture core */')
+        return {'source':'official_https_zip','manifest_count':100,'official_checksums_verified':True}
     def wp(self,target,args,step,stdin=None,timeout=120):
         self.calls.append((args,step,stdin))
         if self.fail_step==step:raise cms.BootstrapError(step+'_failed')
-        if step=='core_download':
-            (target/'wp-content/plugins').mkdir(parents=True)
-            (target/'wp-admin').mkdir()
-            (target/'index.php').write_text('<?php /* fixture core */')
         if step=='wordpress_install' and self.mutate_front:self.mutate_front.write_text('external concurrent edit')
         if step=='service_credentials':
             value={'service_user_id':2,'service_username':'apt_growth_service','service_role':'apt_growth_product_operator','service_password':'fixture-service-password','application_password':'fixture-application-password','consumer_key':'ck_fixture','consumer_secret':'cs_fixture'}
@@ -129,6 +134,57 @@ class BootstrapTests(unittest.TestCase):
             return original(path,value)
         with patch.object(cms,'atomic_private_json',write):report=self.run_it()
         self.assertEqual(report['reason'],'secure_receipt_write_failed');self.assertEqual(report['maintenance_lock'],'closed_after_failure')
+
+
+class CoreZipTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.target=Path(self.tmp.name)/'cms';self.target.mkdir()
+        (self.target/'.htaccess').write_text(cms.maintenance_htaccess())
+        self.files={'wp-includes/fixture-%03d.php'%i:b'<?php /* fixture */' for i in range(100)}
+        self.long='wp-includes/php-ai-client/src/Providers/Contracts/ProviderWithOperationsHandlerInterface.php'
+        self.files[self.long]=b'<?php interface CompleteName {}'
+        self.files['wp-content/themes/example/fonts/Inter-VariableFont_slnt,wght.ttf']=b'fixturefont'
+        self.files['wp-content/plugins/example/logo@2x.png']=b'fixtureimage'
+    def tearDown(self):self.tmp.cleanup()
+    def manifest(self):return {name:hashlib.md5(value).hexdigest() for name,value in self.files.items()}
+    def archive(self,extras=None,override=None):
+        buffer=io.BytesIO()
+        with zipfile.ZipFile(buffer,'w',compression=zipfile.ZIP_DEFLATED) as archive:
+            for name,value in self.files.items():archive.writestr('wordpress/'+name,(override or {}).get(name,value))
+            for name,value in (extras or {}).items():archive.writestr(name,value)
+        return buffer.getvalue()
+    def test_preserves_long_full_paths_and_scoped_punctuation(self):
+        report=cms.extract_core_archive(self.target,self.archive(),self.manifest())
+        self.assertTrue(report['official_checksums_verified']);self.assertEqual((self.target/self.long).read_bytes(),self.files[self.long])
+        self.assertFalse((self.target/self.long[:-2]).exists());self.assertIn('Require all denied',(self.target/'.htaccess').read_text())
+    def test_path_traversal_is_rejected_before_extraction(self):
+        with self.assertRaisesRegex(cms.BootstrapError,'core_archive_path_invalid'):cms.extract_core_archive(self.target,self.archive({'wordpress/../../outside':b'evil'}),self.manifest())
+        self.assertEqual([p.name for p in self.target.iterdir()],['.htaccess']);self.assertFalse((self.target.parent/'outside').exists())
+    def test_absolute_or_backslash_or_control_paths_rejected(self):
+        for value in ('/etc/passwd','a/../b','a\\b','a//b','a\x00b','a\nb'):
+            with self.subTest(value=value),self.assertRaises(cms.BootstrapError):cms.core_relative_path(value)
+    def test_corrupt_file_fails_official_checksum(self):
+        with self.assertRaisesRegex(cms.BootstrapError,'core_official_checksum_mismatch'):cms.extract_core_archive(self.target,self.archive(override={self.long:b'wrong'}),self.manifest())
+        self.assertFalse((self.target/'wp-config.php').exists())
+    def test_missing_manifest_file_fails_integrity(self):
+        manifest=self.manifest();manifest['wp-includes/missing.php']='0'*32
+        with self.assertRaisesRegex(cms.BootstrapError,'core_official_checksum_missing_file'):cms.extract_core_archive(self.target,self.archive(),manifest)
+    def test_symlink_member_rejected_before_any_extraction(self):
+        buffer=io.BytesIO(self.archive())
+        with zipfile.ZipFile(buffer,'a') as archive:
+            link=zipfile.ZipInfo('wordpress/wp-includes/evil');link.create_system=3;link.external_attr=0o120777<<16;archive.writestr(link,'/etc/passwd')
+        with self.assertRaisesRegex(cms.BootstrapError,'core_archive_entry_invalid'):cms.extract_core_archive(self.target,buffer.getvalue(),self.manifest())
+        self.assertEqual(len(list(self.target.iterdir())),1)
+    def test_archive_cannot_replace_maintenance_or_create_config(self):
+        for name in ('.htaccess','wp-config.php'):
+            with self.subTest(name=name),self.assertRaisesRegex(cms.BootstrapError,'core_archive_protected_file'):cms.extract_core_archive(self.target,self.archive({'wordpress/'+name:b'evil'}),self.manifest())
+        self.assertEqual(len(list(self.target.iterdir())),1)
+    def test_non_official_zip_root_rejected(self):
+        with self.assertRaisesRegex(cms.BootstrapError,'core_archive_root_invalid'):cms.extract_core_archive(self.target,self.archive({'other/index.php':b'evil'}),self.manifest())
+    def test_existing_core_is_never_overwritten(self):
+        path=self.target/'wp-includes/fixture-000.php';path.parent.mkdir();path.write_bytes(b'existing')
+        with self.assertRaisesRegex(cms.BootstrapError,'core_archive_existing_path'):cms.extract_core_archive(self.target,self.archive(),self.manifest())
+        self.assertEqual(path.read_bytes(),b'existing')
 
 
 if __name__=='__main__':unittest.main()
