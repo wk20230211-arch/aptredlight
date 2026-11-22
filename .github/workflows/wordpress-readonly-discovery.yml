@@ -1,0 +1,330 @@
+name: Inspect preserved WordPress backend (read only)
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wordpress-readonly-discovery.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aptredlight-wordpress-readonly-discovery
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Inspect fixed public REST URLs without credentials
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import datetime, json, os, pathlib, socket, ssl
+          import urllib.error, urllib.parse, urllib.request
+
+          origin = 'https://www.aptredlight.com'
+          endpoints = ['/wp-json/', '/wp-json/wc/v3/products?per_page=10',
+                       '/wp-json/wc/store/v1/products?per_page=1', '/index.php?rest_route=/']
+          report = {'schema': 1, 'checked_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    'mode': 'read_only', 'canonical_origin': origin,
+                    'authenticated_woocommerce_rest_read': False,
+                    'limitations': ['File existence and WP-CLI queries do not prove an authenticated WooCommerce REST API read.',
+                                    'No configuration, plugin, theme, user, credential, product or order write command is executed.',
+                                    'WP-CLI loads WordPress core; skip-plugins does not disable mu-plugins or cache drop-ins.'],
+                    'http': [], 'ssh_identity': {'status': 'not_run'}, 'remote': {'status': 'not_run'}}
+
+          class OutOfScopeRedirect(Exception):
+              pass
+
+          class FixedOriginRedirect(urllib.request.HTTPRedirectHandler):
+              max_repeats, max_redirections = 2, 4
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  parsed = urllib.parse.urlsplit(newurl)
+                  if parsed.scheme != 'https' or parsed.netloc != 'www.aptredlight.com':
+                      raise OutOfScopeRedirect()
+                  return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+          def safe_url(value):
+              parsed = urllib.parse.urlsplit(value)
+              query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+              safe = [(k, v) for k, v in query if k in ('rest_route', 'per_page')]
+              return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path,
+                                             urllib.parse.urlencode(safe), ''))[:1200]
+
+          opener = urllib.request.build_opener(FixedOriginRedirect)
+          for endpoint in endpoints:
+              row = {'requested_url': origin + endpoint, 'status': None, 'content_type': None,
+                     'final_url': None, 'json': False, 'namespaces': [], 'failure_class': None}
+              try:
+                  request = urllib.request.Request(origin + endpoint, headers={
+                      'User-Agent': 'APTREDLIGHT-WordPress-ReadOnly-Discovery/1.0',
+                      'Accept': 'application/json', 'Accept-Encoding': 'identity'})
+                  try:
+                      response = opener.open(request, timeout=18)
+                  except urllib.error.HTTPError as error:
+                      response = error
+                  with response:
+                      row.update(status=response.status, content_type=response.headers.get('Content-Type', '')[:160],
+                                 final_url=safe_url(response.geturl()))
+                      body = response.read(2 * 1024 * 1024 + 1)
+                  if len(body) > 2 * 1024 * 1024:
+                      row['failure_class'] = 'response_over_limit'
+                  else:
+                      try:
+                          value = json.loads(body)
+                          row['json'] = True
+                          row['json_shape'] = 'object' if isinstance(value, dict) else 'array' if isinstance(value, list) else 'scalar'
+                          if isinstance(value, dict):
+                              namespaces = value.get('namespaces', [])
+                              if isinstance(namespaces, list):
+                                  row['namespaces'] = [ns for ns in ('wp/v2', 'wc/v3', 'wc/store/v1') if ns in namespaces]
+                              # Only bounded API error codes, never arbitrary response bodies.
+                              code = value.get('code')
+                              if isinstance(code, str) and code.replace('_', '').isalnum() and len(code) <= 100:
+                                  row['api_error_code'] = code
+                          elif isinstance(value, list):
+                              row['returned_count'] = len(value)
+                      except (ValueError, UnicodeError):
+                          row['failure_class'] = 'not_json'
+              except OutOfScopeRedirect:
+                  row['failure_class'] = 'redirect_outside_fixed_https_origin'
+              except (TimeoutError, socket.timeout):
+                  row['failure_class'] = 'timeout'
+              except ssl.SSLError:
+                  row['failure_class'] = 'tls_error'
+              except Exception:
+                  row['failure_class'] = 'http_probe_failed'
+              report['http'].append(row)
+          path = pathlib.Path(os.environ['RUNNER_TEMP'], 'wordpress-readonly-discovery.json')
+          path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps({'mode': 'read_only', 'http': report['http']}, ensure_ascii=False))
+          PYCODE
+
+      - name: Resolve fixed hosting target and verify its pinned ED25519 key
+        env:
+          HOSTINGER_SSH_HOST: ${{ vars.HOSTINGER_SSH_HOST }}
+          HOSTINGER_SSH_PORT: ${{ vars.HOSTINGER_SSH_PORT }}
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, pathlib, subprocess, sys
+          sys.path.insert(0, 'tools')
+          from verify_hostinger_identity import read_config, valid_host, valid_port, verify, write_receipt
+          receipt_path = pathlib.Path(os.environ['RUNNER_TEMP'], 'wordpress-readonly-discovery.json')
+          report = json.loads(receipt_path.read_text(encoding='utf-8'))
+          try:
+              config = read_config(pathlib.Path('.hostinger/deploy.json').resolve())
+              host = valid_host((os.environ.get('HOSTINGER_SSH_HOST') or config['ssh_host']).strip())
+              port = valid_port(int(os.environ.get('HOSTINGER_SSH_PORT') or config['ssh_port']))
+              if config['ssh_user'] != 'u469397229' or config['web_root'] != '/home/u469397229/domains/aptredlight.com/public_html':
+                  raise ValueError('fixed_scope_mismatch')
+              result = subprocess.run(['ssh-keyscan', '-T', '10', '-p', str(port), '-t', 'ed25519', host],
+                                      capture_output=True, timeout=20, check=False)
+              if result.returncode or len(result.stdout) > 65536:
+                  raise ValueError('keyscan_failed')
+              known_hosts = result.stdout.decode('utf-8')
+              identity = verify(config, known_hosts, host, port)
+              path = pathlib.Path(os.environ['RUNNER_TEMP'], 'wp-readonly-known-hosts')
+              path.write_text(known_hosts, encoding='utf-8')
+              path.chmod(0o600)
+              write_receipt(pathlib.Path(os.environ['RUNNER_TEMP'], 'wp-readonly-identity.json'), identity)
+              report['ssh_identity'] = identity
+              with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as out:
+                  out.write('WP_DIAG_SSH_HOST=' + host + '\nWP_DIAG_SSH_PORT=' + str(port) + '\nWP_DIAG_SSH_USER=u469397229\n')
+          except Exception:
+              report['ssh_identity'] = {'status': 'failed', 'failure_class': 'pinned_identity_not_verified'}
+              receipt_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+              print(json.dumps(report['ssh_identity']))
+              sys.exit(1)
+          receipt_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(identity))
+          PYCODE
+
+      - name: Load the existing deployment key in an ephemeral agent
+        env:
+          HOSTINGER_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          if [ -z "$HOSTINGER_SSH_PRIVATE_KEY" ]; then
+            python3 - <<'PYCODE'
+          import json, os, pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'],'wordpress-readonly-discovery.json')
+          r=json.loads(p.read_text());r['remote']={'status':'not_run','failure_class':'deployment_key_missing'}
+          p.write_text(json.dumps(r,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(r['remote']))
+          PYCODE
+            exit 1
+          fi
+          eval "$(ssh-agent -s)" > /dev/null
+          printf 'SSH_AUTH_SOCK=%s\nSSH_AGENT_PID=%s\n' "$SSH_AUTH_SOCK" "$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          if ! printf '%s\n' "$HOSTINGER_SSH_PRIVATE_KEY" | ssh-add - > /dev/null 2>&1; then
+            python3 - <<'PYCODE'
+          import json, os, pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'],'wordpress-readonly-discovery.json')
+          r=json.loads(p.read_text());r['remote']={'status':'not_run','failure_class':'deployment_key_not_loadable'}
+          p.write_text(json.dumps(r,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(r['remote']))
+          PYCODE
+            exit 1
+          fi
+
+      - name: Read only fixed WordPress file markers and at most ten products
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, pathlib, re, subprocess, sys
+          remote = r'''
+          import json, pathlib, shutil, subprocess
+          ROOT = pathlib.Path('/home/u469397229/domains/aptredlight.com/public_html')
+          CANDIDATES = (ROOT, ROOT / 'wp', ROOT / 'wordpress')
+          FILES = ('index.html', 'index.php', 'wp-config.php', 'wp-load.php', 'wp-content/plugins/woocommerce/woocommerce.php')
+          DIRS = ('wp-admin',)
+          BEGIN, END = 'APTREADONLY_PRODUCTS_BEGIN', 'APTREADONLY_PRODUCTS_END'
+          PHP = r"""
+          wp_suspend_cache_addition(true);
+          $q = new WP_Query(array('post_type'=>'product','post_status'=>array('publish','draft','pending','private','future'),
+            'posts_per_page'=>10,'fields'=>'ids','orderby'=>'ID','order'=>'DESC','no_found_rows'=>true,
+            'cache_results'=>false,'update_post_meta_cache'=>false,'update_post_term_cache'=>false,'suppress_filters'=>true));
+          $read_count=0;
+          foreach($q->posts as $id){
+            $sku=get_post_meta($id,'_sku',true);
+            $title=get_post_field('post_title',$id,'raw');
+            $status=get_post_status($id);
+            $read_count++;
+          }
+          echo 'APTREADONLY_PRODUCTS_BEGIN'.json_encode(array('read_count'=>$read_count)).'APTREADONLY_PRODUCTS_END';
+          """
+          result = {'status':'completed','scope':str(ROOT),'wp_cli_available':bool(shutil.which('wp')),'candidates':[],
+                    'authenticated_woocommerce_rest_read':False,
+                    'privacy':'Identifiers withheld in public CI; use the private workbench for product details.'}
+          for root in CANDIDATES:
+              row={'relative_root':'.' if root==ROOT else root.name,'files':{},'directories':{},
+                   'products_read_count':None,'product_query_status':'not_run'}
+              try:
+                  row['files']={name:(root/name).is_file() for name in FILES}
+                  row['directories']={name:(root/name).is_dir() for name in DIRS}
+                  if root.is_symlink() or root.resolve()!=root:
+                      row['product_query_status']='skipped_symlink_root'
+                  elif not (row['files']['wp-config.php'] and row['files']['wp-load.php']):
+                      row['product_query_status']='wordpress_markers_not_found'
+                  elif not result['wp_cli_available']:
+                      row['product_query_status']='wp_cli_unavailable'
+                  else:
+                      argv=[shutil.which('wp'),'--path='+str(root),'--skip-plugins','--skip-themes','--skip-packages','--no-color','eval',PHP]
+                      try:
+                          command=subprocess.run(argv,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=60,check=False)
+                          if command.returncode:
+                              row['product_query_status']='wp_cli_read_failed'
+                          elif len(command.stdout)>262144:
+                              row['product_query_status']='wp_cli_output_over_limit'
+                          else:
+                              text=command.stdout.decode('utf-8')
+                              if text.count(BEGIN)!=1 or text.count(END)!=1:
+                                  raise ValueError('unexpected_marker')
+                              count=json.loads(text.split(BEGIN,1)[1].split(END,1)[0])
+                              if not isinstance(count,dict) or set(count)!={'read_count'} or type(count['read_count']) is not int or not 0<=count['read_count']<=10:
+                                  raise ValueError('unexpected_products_count')
+                              row['products_read_count']=count['read_count']
+                              row['product_query_status']='read_completed_not_rest_verified'
+                      except subprocess.TimeoutExpired:
+                          row['product_query_status']='wp_cli_read_timeout'
+                      except Exception:
+                          row['product_query_status']='wp_cli_response_invalid'
+              except Exception:
+                  row['product_query_status']='file_probe_failed'
+              result['candidates'].append(row)
+          print('APTREADONLY_REMOTE_BEGIN'+json.dumps(result,ensure_ascii=False)+'APTREADONLY_REMOTE_END')
+          '''
+          p=pathlib.Path(os.environ['RUNNER_TEMP'],'wordpress-readonly-discovery.json')
+          report=json.loads(p.read_text(encoding='utf-8'))
+          args=['ssh','-F','/dev/null','-T','-p',os.environ['WP_DIAG_SSH_PORT'],
+                '-o','BatchMode=yes','-o','NumberOfPasswordPrompts=0','-o','ConnectTimeout=15',
+                '-o','ServerAliveInterval=5','-o','ServerAliveCountMax=2','-o','StrictHostKeyChecking=yes',
+                '-o','UserKnownHostsFile='+str(pathlib.Path(os.environ['RUNNER_TEMP'],'wp-readonly-known-hosts')),
+                '-o','ForwardAgent=no','-o','ClearAllForwardings=yes','-o','PermitLocalCommand=no',
+                '-o','UpdateHostKeys=no','-o','LogLevel=ERROR',
+                os.environ['WP_DIAG_SSH_USER']+'@'+os.environ['WP_DIAG_SSH_HOST'],'python3 -']
+          try:
+              run=subprocess.run(args,input=remote.encode('utf-8'),capture_output=True,timeout=240,check=False)
+              if run.returncode:
+                  # Classify errors in memory; never print SSH or remote stderr.
+                  err=run.stderr.lower()
+                  category=('ssh_authentication_failed' if b'permission denied' in err else
+                            'ssh_identity_rejected' if b'host key verification failed' in err else
+                            'remote_python_unavailable' if b'python3: command not found' in err else
+                            'ssh_or_readonly_probe_failed')
+                  report['remote']={'status':'failed','failure_class':category}
+              elif len(run.stdout)>524288:
+                  report['remote']={'status':'failed','failure_class':'remote_output_over_limit'}
+              else:
+                  text=run.stdout.decode('utf-8')
+                  begin,end='APTREADONLY_REMOTE_BEGIN','APTREADONLY_REMOTE_END'
+                  if text.count(begin)!=1 or text.count(end)!=1:
+                      raise ValueError('unexpected_remote_marker')
+                  value=json.loads(text.split(begin,1)[1].split(end,1)[0])
+                  if value.get('scope')!='/home/u469397229/domains/aptredlight.com/public_html' or value.get('status')!='completed':
+                      raise ValueError('remote_scope_mismatch')
+                  rows=value.get('candidates')
+                  if not isinstance(rows,list) or [v.get('relative_root') for v in rows]!=['.','wp','wordpress']:
+                      raise ValueError('unexpected_remote_candidates')
+                  # The repository and Actions artifacts are public: never retain product identifiers.
+                  permitted_status={'not_run','skipped_symlink_root','wordpress_markers_not_found','wp_cli_unavailable',
+                                    'wp_cli_read_failed','wp_cli_output_over_limit','read_completed_not_rest_verified',
+                                    'wp_cli_read_timeout','wp_cli_response_invalid','file_probe_failed'}
+                  expected_files={'index.html','index.php','wp-config.php','wp-load.php','wp-content/plugins/woocommerce/woocommerce.php'}
+                  clean_rows=[]
+                  for row in rows:
+                      files,dirs=row.get('files'),row.get('directories')
+                      count=row.get('products_read_count')
+                      status=row.get('product_query_status')
+                      if (not isinstance(files,dict) or set(files)!=expected_files or any(type(v) is not bool for v in files.values())
+                          or not isinstance(dirs,dict) or set(dirs)!={'wp-admin'} or type(dirs['wp-admin']) is not bool
+                          or status not in permitted_status or count is not None and (type(count) is not int or not 0<=count<=10)):
+                          raise ValueError('unexpected_safe_remote_fields')
+                      clean_rows.append({'relative_root':row['relative_root'],'files':files,'directories':dirs,
+                                         'product_query_status':status,'products_read_count':count})
+                  report['remote']={'status':'completed','scope':'/home/u469397229/domains/aptredlight.com/public_html',
+                                    'wp_cli_available':value.get('wp_cli_available') is True,'candidates':clean_rows,
+                                    'authenticated_woocommerce_rest_read':False,
+                                    'privacy':'Identifiers withheld in public CI; use the private workbench for product details.'}
+          except subprocess.TimeoutExpired:
+              report['remote']={'status':'failed','failure_class':'ssh_probe_timeout'}
+          except Exception:
+              report['remote']={'status':'failed','failure_class':'remote_response_invalid'}
+          p.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps({'mode':'read_only','remote':report['remote'],
+                            'authenticated_woocommerce_rest_read':False},ensure_ascii=False))
+          sys.exit(0 if report['remote'].get('status')=='completed' else 1)
+          PYCODE
+
+      - name: Always remove the ephemeral SSH agent and runner public-key file
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${SSH_AGENT_PID:-}" ]; then
+            ssh-add -D > /dev/null 2>&1 || true
+            ssh-agent -k > /dev/null 2>&1 || true
+          fi
+          rm -f "$RUNNER_TEMP/wp-readonly-known-hosts"
+
+      - name: Retain only the bounded read-only discovery receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wordpress-readonly-discovery
+          path: |
+            ${{ runner.temp }}/wordpress-readonly-discovery.json
+            ${{ runner.temp }}/wp-readonly-identity.json
+          if-no-files-found: warn
+          retention-days: 7
