@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import tarfile
 import tempfile
@@ -194,6 +195,97 @@ class RunnerGuards(unittest.TestCase):
         self.assertNotIn("fetch(",html)
         self.assertIn("JSON.stringify(fields)",html)
         self.assertIn("event.preventDefault()",html)
+
+
+class ObservedSecretAndContact(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.private=subprocess.run(['openssl','genpkey','-algorithm','RSA','-pkeyopt','rsa_keygen_bits:3072'],capture_output=True,check=True).stdout
+        cls.public=subprocess.run(['openssl','pkey','-pubout'],input=cls.private,capture_output=True,check=True).stdout
+        der=subprocess.run(['openssl','pkey','-pubout','-outform','DER'],input=cls.private,capture_output=True,check=True).stdout
+        import hashlib
+        cls.pin=hashlib.sha256(der).hexdigest()
+
+    def observed(self,**changes):
+        value={'engine':'mysql','host':'127.0.0.1','port':3306,'database':'u469397229_fixture',
+               'username':'u469397229_fixture','password':'Fixture-database-password-123!','charset':'utf8mb4'}
+        value.update(changes);return value
+
+    def contact_fixture(self,folder,email='fixture-owner@example.test'):
+        root=Path(folder);private=root/'private.pem';public=root/'public.pem';contact=root/'contact.json'
+        private.write_bytes(self.private);private.chmod(0o600);public.write_bytes(self.public)
+        ciphertext=subprocess.run(['openssl','pkeyutl','-encrypt','-pubin','-inkey',str(public),'-pkeyopt','rsa_padding_mode:oaep','-pkeyopt','rsa_oaep_md:sha256','-pkeyopt','rsa_mgf1_md:sha256'],input=email.encode(),capture_output=True,check=True).stdout
+        value={'schema':1,'origin':'https://www.aptredlight.com/cms','key_sha256':self.pin,
+               'ciphertext_b64':base64.b64encode(ciphertext).decode()}
+        contact.write_text(json.dumps(value));return private,contact,value
+
+    def real_contact_child(self,private):
+        def execute(args,*,data,timeout):
+            code=shlex.split(args[-1])[2]
+            code=code.replace('/home/u469397229/.aptredlight-cms-bootstrap/admin-contact-private.pem',str(private))
+            return subprocess.run(['python3','-c',code],input=data,capture_output=True,check=False,timeout=timeout)
+        return execute
+
+    def test_observed_seven_fields_canonicalize_without_guessing_email(self):
+        value=setup.database_secret(json.dumps(self.observed()))
+        self.assertEqual(value,{'name':'u469397229_fixture','user':'u469397229_fixture','password':'Fixture-database-password-123!','host':'127.0.0.1'})
+        self.assertNotIn('admin_email',value)
+        value=setup.database_secret(json.dumps(self.observed(engine='MariaDB',charset='utf8')))
+        self.assertEqual(value['name'],'u469397229_fixture')
+
+    def test_observed_engine_port_charset_and_conflicting_aliases_rejected(self):
+        values=[self.observed(engine='postgres'),self.observed(port='3306'),self.observed(port=3306.0),
+                self.observed(port=3307),self.observed(charset='latin1'),self.observed(name='u469397229_other'),
+                self.observed(user='u469397229_other'),self.observed(host='external.example')]
+        for value in values:
+            with self.subTest(fields=list(value)),self.assertRaises(setup.SetupError):setup.database_secret(json.dumps(value))
+        raw=json.dumps(self.observed())[:-1]+',"database":"u469397229_other"}'
+        with self.assertRaises(setup.SetupError):setup.database_secret(raw)
+
+    def test_contact_roundtrip_is_captured_without_printing_email(self):
+        email='fixture-owner@example.test'
+        with tempfile.TemporaryDirectory() as folder:
+            private,path,value=self.contact_fixture(folder,email)
+            with mock.patch.object(setup,'child',side_effect=self.real_contact_child(private)),contextlib.redirect_stdout(io.StringIO()) as console:
+                result=setup.admin_contact(['fixture-ssh'],path)
+            self.assertEqual(result,email);self.assertEqual(console.getvalue(),'')
+            self.assertNotIn(email,path.read_text())
+
+    def test_missing_or_wrong_origin_contact_never_invokes_ssh(self):
+        with tempfile.TemporaryDirectory() as folder,mock.patch.object(setup,'child') as child:
+            with self.assertRaisesRegex(setup.SetupError,'admin_contact_missing'):
+                setup.admin_contact(['fixture-ssh'],Path(folder)/'missing.json')
+            _,path,value=self.contact_fixture(folder)
+            value['origin']='https://other.example/cms';path.write_text(json.dumps(value))
+            with self.assertRaisesRegex(setup.SetupError,'admin_contact_target_mismatch'):
+                setup.admin_contact(['fixture-ssh'],path)
+            child.assert_not_called()
+
+    def test_wrong_key_hash_bad_cipher_and_private_permissions_fail_closed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            private,path,value=self.contact_fixture(folder)
+            with mock.patch.object(setup,'child',side_effect=self.real_contact_child(private)):
+                changed={**value,'key_sha256':'0'*64};path.write_text(json.dumps(changed))
+                with self.assertRaisesRegex(setup.SetupError,'admin_contact_decryption_failed'):
+                    setup.admin_contact(['fixture-ssh'],path)
+                ciphertext=bytearray(base64.b64decode(value['ciphertext_b64']));ciphertext[-1]^=1
+                path.write_text(json.dumps({**value,'ciphertext_b64':base64.b64encode(ciphertext).decode()}))
+                with self.assertRaisesRegex(setup.SetupError,'admin_contact_decryption_failed'):
+                    setup.admin_contact(['fixture-ssh'],path)
+                path.write_text(json.dumps(value));private.chmod(0o640)
+                with self.assertRaisesRegex(setup.SetupError,'admin_contact_decryption_failed'):
+                    setup.admin_contact(['fixture-ssh'],path)
+
+    def test_cipher_size_and_symlink_rejected_before_ssh(self):
+        with tempfile.TemporaryDirectory() as folder,mock.patch.object(setup,'child') as child:
+            _,path,value=self.contact_fixture(folder)
+            path.write_text(json.dumps({**value,'ciphertext_b64':'not-base64'}))
+            with self.assertRaisesRegex(setup.SetupError,'admin_contact_ciphertext_invalid'):
+                setup.admin_contact(['fixture-ssh'],path)
+            link=Path(folder)/'link.json';link.symlink_to(path)
+            with self.assertRaisesRegex(setup.SetupError,'admin_contact_missing'):
+                setup.admin_contact(['fixture-ssh'],link)
+            child.assert_not_called()
 
 
 if __name__ == "__main__":
