@@ -7,13 +7,15 @@ import argparse
 import base64
 import hashlib
 import hmac
+import io
 import json
 import os
 import fcntl
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -21,6 +23,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 
 ROOT = Path('/home/u469397229/domains/aptredlight.com/public_html')
 TARGET = ROOT / 'cms'
@@ -96,6 +99,77 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):return None
 
 
+class OfficialCoreRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self,request,fp,code,message,headers,new_url):
+        parsed=urllib.parse.urlsplit(new_url)
+        if parsed.scheme!='https' or parsed.hostname not in ('wordpress.org','downloads.wordpress.org') or parsed.username or parsed.port not in (None,443):
+            raise BootstrapError('core_download_redirect_rejected')
+        return super().redirect_request(request,fp,code,message,headers,new_url)
+
+
+def core_relative_path(value):
+    # Official core includes scoped JS packages such as @wordpress. Validate
+    # filesystem containment rather than an incomplete character allowlist.
+    if not isinstance(value,str) or not value or len(value)>1024 or '\\' in value or any(ord(c)<32 or ord(c)==127 for c in value):
+        raise BootstrapError('core_archive_path_invalid')
+    path=PurePosixPath(value)
+    if path.is_absolute() or any(part in ('','.','..') for part in value.split('/')) or ':' in value:
+        raise BootstrapError('core_archive_path_invalid')
+    return path
+
+
+def extract_core_archive(target,archive_bytes,checksums):
+    """Extract the official ZIP with full filenames, then verify every manifest file."""
+    target=Path(target)
+    if not target.is_dir() or not safe_chain(target):raise BootstrapError('core_target_invalid')
+    if not isinstance(checksums,dict) or not 100<=len(checksums)<=10000:raise BootstrapError('core_manifest_invalid')
+    manifest={}
+    for name,digest in checksums.items():
+        core_relative_path(name)
+        if not isinstance(digest,str) or re.fullmatch(r'[0-9a-fA-F]{32}',digest) is None:raise BootstrapError('core_manifest_invalid')
+        manifest[name]=digest.lower()
+    if len(archive_bytes)>64*1024*1024:raise BootstrapError('core_zip_size_limit')
+    try:archive=zipfile.ZipFile(io.BytesIO(archive_bytes))
+    except (ValueError,zipfile.BadZipFile):raise BootstrapError('core_zip_invalid') from None
+    with archive:
+        entries=archive.infolist();names=set();planned=[];total=0
+        if not entries or len(entries)>10000:raise BootstrapError('core_archive_count_limit')
+        for entry in entries:
+            raw=entry.filename
+            if raw!=entry.orig_filename:raise BootstrapError('core_archive_path_invalid')
+            if raw=='wordpress/' and entry.is_dir():continue
+            if not raw.startswith('wordpress/'):raise BootstrapError('core_archive_root_invalid')
+            name=raw[len('wordpress/'):-1] if entry.is_dir() else raw[len('wordpress/'):]
+            relative=core_relative_path(name);kind=(entry.external_attr>>16)&0o170000
+            if kind not in (0,stat.S_IFREG,stat.S_IFDIR) or entry.flag_bits&1 or entry.compress_type not in (zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED):raise BootstrapError('core_archive_entry_invalid')
+            if kind and ((kind==stat.S_IFDIR)!=entry.is_dir()):raise BootstrapError('core_archive_entry_invalid')
+            if name in names:raise BootstrapError('core_archive_duplicate')
+            names.add(name)
+            if str(relative) in ('.htaccess','wp-config.php'):raise BootstrapError('core_archive_protected_file')
+            destination=target.joinpath(*relative.parts)
+            if not safe_chain(destination) or destination.exists():raise BootstrapError('core_archive_existing_path')
+            if entry.file_size<0 or entry.file_size>32*1024*1024:raise BootstrapError('core_archive_file_size_limit')
+            total+=entry.file_size
+            if total>256*1024*1024:raise BootstrapError('core_archive_expanded_size_limit')
+            planned.append((entry,destination))
+        # Validate all archive metadata before any extraction. Never use tar,
+        # whose ustar-name limits truncated the new long AI-client filenames.
+        for entry,destination in planned:
+            if entry.is_dir():destination.mkdir(mode=0o755,parents=True,exist_ok=True);continue
+            destination.parent.mkdir(mode=0o755,parents=True,exist_ok=True)
+            with archive.open(entry) as source,destination.open('xb') as output:
+                shutil.copyfileobj(source,output,length=1024*1024)
+            destination.chmod(0o644)
+    for name,digest in manifest.items():
+        path=target.joinpath(*core_relative_path(name).parts)
+        if not safe_chain(path) or not path.is_file():raise BootstrapError('core_official_checksum_missing_file')
+        md5=hashlib.md5()
+        with path.open('rb') as stream:
+            for block in iter(lambda:stream.read(1024*1024),b''):md5.update(block)
+        if md5.hexdigest()!=digest:raise BootstrapError('core_official_checksum_mismatch')
+    return {'source':'official_https_zip','manifest_count':len(manifest),'official_checksums_verified':True}
+
+
 class Backend:
     def __init__(self,bundle,wp_cli,deadline=None):
         self.bundle=Path(bundle);self.wp_cli=Path(wp_cli)
@@ -154,6 +228,20 @@ class Backend:
                 'woo':str(woo.get('version','')),'woo_php':str(woo.get('requires_php',''))}
         if not all(re.fullmatch(r'\d+(?:\.\d+){1,2}',result[k]) for k in result):raise BootstrapError('version_metadata_invalid')
         return result
+
+    def download_core(self,target,version):
+        if re.fullmatch(r'\d+(?:\.\d+){1,2}',version) is None:raise BootstrapError('core_download_version_invalid')
+        url='https://wordpress.org/wordpress-'+version+'.zip'
+        try:
+            request=urllib.request.Request(url,headers={'User-Agent':'APTREDLIGHT-CMS-Setup/1.1'})
+            with urllib.request.build_opener(OfficialCoreRedirect).open(request,timeout=75) as response:
+                parsed=urllib.parse.urlsplit(response.geturl())
+                if parsed.scheme!='https' or parsed.hostname not in ('wordpress.org','downloads.wordpress.org') or parsed.username or parsed.port not in (None,443):raise BootstrapError('core_download_origin_rejected')
+                raw=response.read(64*1024*1024+1)
+        except BootstrapError:raise
+        except Exception:raise BootstrapError('core_zip_download_failed') from None
+        metadata=self.official_json('https://api.wordpress.org/core/checksums/1.0/?version='+version+'&locale=en_US')
+        return extract_core_archive(target,raw,metadata.get('checksums'))
 
     def database_check(self,db):
         code=r'''mysqli_report(MYSQLI_REPORT_OFF);$v=json_decode(stream_get_contents(STDIN),true);try{$m=@new mysqli($v['host'],$v['user'],$v['password'],$v['name']);if($m->connect_errno){echo json_encode(array('auth_success'=>false));exit;}$q=$m->query('SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema=DATABASE()');if(!$q){echo json_encode(array('auth_success'=>true,'query_success'=>false));exit;}$r=$q->fetch_assoc();echo json_encode(array('auth_success'=>true,'query_success'=>true,'table_count'=>(int)$r['n'],'mysql_only'=>true));}catch(Throwable $e){echo json_encode(array('auth_success'=>false));}'''
@@ -370,7 +458,7 @@ class Bootstrap:
             finally:
                 if probe.is_file():probe.unlink()
             step='core_download'
-            self.backend.wp(self.target,['core','download','--version='+versions['core'],'--locale=en_US'],step)
+            self.report['core_integrity']=self.backend.download_core(self.target,versions['core'])
             self.backend.wp(self.target,['core','verify-checksums','--version='+versions['core'],'--locale=en_US'],'core_checksums')
             config_path=self.target/'wp-config.php'
             fd=os.open(config_path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
