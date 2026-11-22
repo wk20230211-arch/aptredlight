@@ -74,8 +74,18 @@ def database_secret(raw):
         value = json.loads(raw, object_pairs_hook=pairs)
     except (ValueError, UnicodeError):
         raise SetupError("database_secret_not_json") from None
-    require(isinstance(value, dict) and set(value) == {"name", "user", "password", "host", "admin_email"},
-            "database_secret_fields_invalid")
+    require(isinstance(value, dict), "database_secret_fields_invalid")
+    legacy_fields={"name", "user", "password", "host", "admin_email"}
+    observed_sql_fields={"engine", "host", "port", "database", "username", "password", "charset"}
+    if set(value)==observed_sql_fields:
+        require(isinstance(value['engine'],str) and value['engine'].lower() in ('mysql','mariadb'),
+                'database_engine_invalid')
+        require(type(value['port']) is int and value['port']==3306, 'database_port_invalid')
+        require(isinstance(value['charset'],str) and value['charset'].lower() in ('utf8','utf8mb4'),
+                'database_charset_invalid')
+        value={'name':value['database'],'user':value['username'],'password':value['password'],'host':value['host']}
+    else:
+        require(set(value)==legacy_fields, "database_secret_fields_invalid")
     for key in ("name", "user"):
         require(isinstance(value[key], str) and len(value[key]) <= 64 and re.fullmatch(ACCOUNT + r"_[A-Za-z0-9_]{1,53}", value[key]),
                 "database_account_scope_invalid")
@@ -85,11 +95,82 @@ def database_secret(raw):
         value["host"] = value["host"][:-5]
     require(isinstance(value["password"], str) and 12 <= len(value["password"]) <= 256
             and not any(ord(c) < 32 or ord(c) == 127 for c in value["password"]), "database_password_invalid")
+    if 'admin_email' not in value:
+        return value
     email = value["admin_email"]
     require(isinstance(email, str) and len(email) <= 254
             and re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?", email)
             and ".." not in email and "." in email.rsplit("@", 1)[-1], "admin_email_invalid")
     return value
+
+
+def admin_contact(ssh,path):
+    """Read one owner-verified notification address via the fixed private channel.
+
+    The repository contains only an RSA ciphertext and public-key hash. SSH stdout
+    is captured internally, never streamed to Actions logs or public receipts.
+    """
+    require(path.is_file() and not path.is_symlink()
+            and not any(parent.is_symlink() for parent in path.parents), 'admin_contact_missing')
+    require(path.stat().st_size<=8192,'admin_contact_file_invalid')
+    try:
+        def pairs(items):
+            value={}
+            for key,content in items:
+                require(key not in value,'admin_contact_schema_invalid')
+                value[key]=content
+            return value
+        contact=json.loads(path.read_text(encoding='utf-8'),object_pairs_hook=pairs)
+    except SetupError:
+        raise
+    except Exception:
+        raise SetupError('admin_contact_file_invalid') from None
+    require(isinstance(contact,dict) and set(contact)=={'schema','origin','key_sha256','ciphertext_b64'}
+            and type(contact.get('schema')) is int and contact['schema']==1,
+            'admin_contact_schema_invalid')
+    require(contact['origin']=='https://www.aptredlight.com/cms','admin_contact_target_mismatch')
+    require(isinstance(contact['key_sha256'],str) and re.fullmatch(r'[0-9a-f]{64}',contact['key_sha256']),
+            'admin_contact_key_hash_invalid')
+    try:
+        ciphertext=base64.b64decode(contact['ciphertext_b64'],validate=True)
+    except (TypeError,ValueError):
+        raise SetupError('admin_contact_ciphertext_invalid') from None
+    require(len(ciphertext)==384 and base64.b64encode(ciphertext).decode()==contact['ciphertext_b64'],
+            'admin_contact_ciphertext_invalid')
+    remote="""import hashlib,hmac,json,os,pathlib,re,stat,subprocess,sys
+try:
+ key=pathlib.Path('/home/u469397229/.aptredlight-cms-bootstrap/admin-contact-private.pem')
+ if any(p.is_symlink() for p in (key,*key.parents)):raise ValueError()
+ info=key.stat()
+ if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.getuid() or stat.S_IMODE(info.st_mode)!=0o600 or info.st_size>16384:raise ValueError()
+ raw=sys.stdin.buffer.read(385)
+ if len(raw)!=384:raise ValueError()
+ public=subprocess.run(['openssl','pkey','-in',str(key),'-pubout','-outform','DER'],input=b'',capture_output=True,timeout=12,check=False)
+ if public.returncode or len(public.stdout)>8192 or not hmac.compare_digest(hashlib.sha256(public.stdout).hexdigest(),EXPECTED_KEY_HASH):raise ValueError()
+ result=subprocess.run(['openssl','pkeyutl','-decrypt','-inkey',str(key),'-pkeyopt','rsa_padding_mode:oaep','-pkeyopt','rsa_oaep_md:sha256','-pkeyopt','rsa_mgf1_md:sha256'],input=raw,capture_output=True,timeout=12,check=False)
+ if result.returncode or not 3<=len(result.stdout)<=254:raise ValueError()
+ email=result.stdout.decode('utf-8')
+ if not re.fullmatch(r'[^\\s<>@]+@[^\\s<>@]+\\.[^\\s<>@]+',email) or any(ord(c)<33 or ord(c)>126 for c in email):raise ValueError()
+ print(json.dumps({'admin_email':email},separators=(',',':')))
+except Exception:
+ sys.exit(3)
+""".replace('EXPECTED_KEY_HASH',repr(contact['key_sha256']))
+    try:
+        result=child(ssh+['python3 -c '+shlex.quote(remote)],data=ciphertext,timeout=40)
+    except SetupError:
+        raise SetupError('admin_contact_decryption_failed') from None
+    require(result.returncode==0 and len(result.stdout)<=1024,'admin_contact_decryption_failed')
+    try:
+        value=json.loads(result.stdout)
+    except Exception:
+        raise SetupError('admin_contact_response_invalid') from None
+    require(isinstance(value,dict) and set(value)=={'admin_email'} and isinstance(value['admin_email'],str),
+            'admin_contact_response_invalid')
+    # Reuse the existing strict email validator without exposing its value.
+    checked=database_secret(json.dumps({'name':ACCOUNT+'_validation','user':ACCOUNT+'_validation',
+                                       'password':'validation-only-1234','host':'localhost',
+                                       'admin_email':value['admin_email']}))
+    return checked['admin_email']
 
 
 def receipt_public_key(path):
@@ -246,6 +327,7 @@ def main(argv=None):
     parser.add_argument("--public-key", type=Path, required=True)
     parser.add_argument("--known-hosts", type=Path, required=True)
     parser.add_argument("--receipt", type=Path, required=True)
+    parser.add_argument("--admin-contact",type=Path,default=Path('.hostinger/cms-admin-contact.json'))
     args = parser.parse_args(argv)
     report = {"schema": 1, "status": "not_started", "cms_url": "https://www.aptredlight.com/cms",
               "checked_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -264,6 +346,9 @@ def main(argv=None):
         db = database_secret(raw_secret)
         public_key = receipt_public_key(args.public_key)
         ssh = ssh_arguments(args.known_hosts)
+        if 'admin_email' not in db:
+            db['admin_email']=admin_contact(ssh,args.admin_contact)
+            db=database_secret(json.dumps(db))
         stage, remote_receipt = paths_for_run()
         require(args.source.is_file() and not args.source.is_symlink(), "bootstrap_source_missing")
         phar = download_wp_cli()
