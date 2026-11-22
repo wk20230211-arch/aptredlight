@@ -1,0 +1,33 @@
+name: Inspect CMS binding field compatibility (no values)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cms-binding-schema.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Report known field names and types only
+        env:
+          CMS_BINDING: ${{ secrets.APTREDLIGHT_CMS_DATABASE }}
+        run: |
+          python3 - <<'PY'
+          import json,os
+          known={'name','user','password','host','port','admin_email','email','admin_login','admin_password','username','database','db','connection','credentials','wordpress','db_name','db_user','db_password','db_host','db_port','DB_NAME','DB_USER','DB_PASSWORD','DB_HOST','DB_PORT','MYSQL_DATABASE','MYSQL_USER','MYSQL_PASSWORD','MYSQL_HOST','MYSQL_PORT','WP_ADMIN_EMAIL','WP_SITE_URL','site_url','url','database_name','database_user','database_password','database_host','database_port','site','target','ssh','version','schema','ssl','sslmode','encrypted','ciphertext','data'}
+          def shape(v,depth=0):
+              if depth>3:return {'type':'nested_limit'}
+              if isinstance(v,dict):
+                  return {'type':'object','known_fields':{k:shape(x,depth+1) for k,x in v.items() if k in known},'unknown_field_count':sum(k not in known for k in v)}
+              return {'type':'null' if v is None else 'boolean' if isinstance(v,bool) else 'number' if isinstance(v,(int,float)) else 'string' if isinstance(v,str) else 'array' if isinstance(v,list) else 'unknown'}
+          raw=os.environ.pop('CMS_BINDING','')
+          try:
+              v=json.loads(raw)
+              print(json.dumps({'status':'schema_inspected','values_returned':False,'schema':shape(v)},separators=(',',':')))
+          except Exception:
+              print('{"status":"binding_not_json_or_missing","values_returned":false}')
+          PY
