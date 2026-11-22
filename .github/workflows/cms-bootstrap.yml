@@ -1,0 +1,151 @@
+name: Install isolated WordPress CMS and WooCommerce
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cms-bootstrap.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aptredlight-hostinger-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Validate installation guards and credential handling
+        run: |
+          python3 tools/test_cms_bootstrap.py
+          python3 tools/test_run_cms_bootstrap.py
+          python3 -m py_compile tools/cms_bootstrap.py tools/run_cms_bootstrap.py
+
+  bootstrap:
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require the one-time database binding before any SSH operation
+        env:
+          HAS_CMS_DATABASE: ${{ secrets.APTREDLIGHT_CMS_DATABASE != '' }}
+          HAS_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY != '' }}
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,pathlib,sys
+          missing=[]
+          if os.environ.get('HAS_CMS_DATABASE')!='true':missing.append('APTREDLIGHT_CMS_DATABASE')
+          if os.environ.get('HAS_SSH_PRIVATE_KEY')!='true':missing.append('HOSTINGER_SSH_PRIVATE_KEY')
+          value={'schema':1,'status':'needs_setup' if missing else 'preflight_pending',
+                 'reason':'required_secret_missing' if missing else None,
+                 'checked_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                 'cms_url':'https://www.aptredlight.com/cms','missing':missing,
+                 'writes_performed':False,'wordpress_installed':False,
+                 'woocommerce_active':False,'product_writes_performed':False}
+          pathlib.Path(os.environ['RUNNER_TEMP'],'cms-bootstrap-receipt.json').write_text(json.dumps(value,indent=2)+'\n')
+          print(json.dumps({'status':value['status'],'missing':missing}))
+          if missing:sys.exit(1)
+          PY
+      - name: Verify the fixed Hostinger target against its owner-pinned ED25519 identity
+        env:
+          HOSTINGER_SSH_HOST: ${{ vars.HOSTINGER_SSH_HOST }}
+          HOSTINGER_SSH_PORT: ${{ vars.HOSTINGER_SSH_PORT }}
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,sys
+          sys.path.insert(0,'tools')
+          from verify_hostinger_identity import read_config,valid_host,valid_port,verify,write_receipt
+          receipt=pathlib.Path(os.environ['RUNNER_TEMP'],'cms-bootstrap-receipt.json')
+          try:
+              config=read_config(pathlib.Path('.hostinger/deploy.json').resolve())
+              host=valid_host((os.environ.get('HOSTINGER_SSH_HOST') or config['ssh_host']).strip())
+              port=valid_port(int(os.environ.get('HOSTINGER_SSH_PORT') or config['ssh_port']))
+              if config['ssh_user']!='u469397229' or config['web_root']!='/home/u469397229/domains/aptredlight.com/public_html':
+                  raise ValueError('fixed_scope_mismatch')
+              value=subprocess.run(['ssh-keyscan','-T','10','-p',str(port),'-t','ed25519',host],capture_output=True,timeout=20,check=False)
+              if value.returncode or len(value.stdout)>65536:raise ValueError('keyscan_failed')
+              known=value.stdout.decode('utf-8')
+              identity=verify(config,known,host,port)
+              path=pathlib.Path(os.environ['RUNNER_TEMP'],'cms-known-hosts')
+              path.write_text(known);path.chmod(0o600)
+              write_receipt(pathlib.Path(os.environ['RUNNER_TEMP'],'cms-identity-receipt.json'),identity)
+              with open(os.environ['GITHUB_ENV'],'a') as out:
+                  out.write('CMS_SSH_HOST='+host+'\nCMS_SSH_PORT='+str(port)+'\n')
+              print(json.dumps(identity))
+          except Exception:
+              report=json.loads(receipt.read_text());report.update(status='blocked',reason='pinned_ssh_identity_not_verified')
+              receipt.write_text(json.dumps(report,indent=2)+'\n')
+              print('{"status":"blocked","reason":"pinned_ssh_identity_not_verified"}')
+              sys.exit(1)
+          PY
+      - name: Load the existing deployment key in an ephemeral SSH agent
+        env:
+          HOSTINGER_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          eval "$(ssh-agent -s)" > /dev/null
+          printf 'SSH_AUTH_SOCK=%s\nSSH_AGENT_PID=%s\n' "$SSH_AUTH_SOCK" "$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          if ! printf '%s\n' "$HOSTINGER_SSH_PRIVATE_KEY" | ssh-add - > /dev/null 2>&1; then
+            python3 - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'],'cms-bootstrap-receipt.json')
+          r=json.loads(p.read_text());r.update(status='blocked',reason='deployment_key_not_loadable')
+          p.write_text(json.dumps(r,indent=2)+'\n')
+          print('{"status":"blocked","reason":"deployment_key_not_loadable"}')
+          PY
+            exit 1
+          fi
+      - name: Install only into an empty CMS directory and an empty dedicated MySQL database
+        env:
+          APTREDLIGHT_CMS_DATABASE: ${{ secrets.APTREDLIGHT_CMS_DATABASE }}
+        run: >-
+          python3 tools/run_cms_bootstrap.py
+          --source tools/cms_bootstrap.py
+          --plugin integrations/wordpress/aptredlight-growth-desk
+          --public-key .hostinger/cms-receipt-public-key.pem
+          --known-hosts "$RUNNER_TEMP/cms-known-hosts"
+          --receipt "$RUNNER_TEMP/cms-bootstrap-receipt.json"
+      - name: Preserve only the redacted receipt and encrypted integration credentials
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aptredlight-cms-bootstrap-receipt
+          path: |
+            ${{ runner.temp }}/cms-bootstrap-receipt.json
+            ${{ runner.temp }}/cms-identity-receipt.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Summarize the actual CMS state without credential contents
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'],'cms-bootstrap-receipt.json')
+          report=json.loads(p.read_text()) if p.exists() else {'status':'unknown','reason':'receipt_missing'}
+          visible={k:report[k] for k in ('status','reason','wordpress_installed','woocommerce_active','product_writes_performed','cms_url','writes_performed') if k in report}
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as out:
+              out.write('CMS installation status (runtime proof, not fixture results)\n\n```json\n'+json.dumps(visible,ensure_ascii=False,indent=2)+'\n```\n')
+              out.write('\nEncrypted credentials, if present, require the retained private receipt key. They are not printed here.\n')
+          PY
+      - name: Remove the ephemeral agent and pinned public host-key file
+        if: always()
+        run: |
+          if [ -n "${SSH_AGENT_PID:-}" ]; then
+            ssh-add -D > /dev/null 2>&1 || true
+            ssh-agent -k > /dev/null 2>&1 || true
+          fi
+          rm -f "$RUNNER_TEMP/cms-known-hosts"

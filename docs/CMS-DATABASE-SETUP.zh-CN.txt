@@ -1,0 +1,42 @@
+APTREDLIGHT · WordPress CMS 一次性数据库绑定
+
+已完成：工作台站主管理员身份绑定、Hostinger SSH 公钥登录、服务器身份核对。
+尚缺：新建 WordPress 所需的 MySQL 数据库连接。Hostinger 当前 MCP 对该托管账号返回 404，无法代建数据库；这不是再次索取发布授权。
+
+推荐使用私有工作台配置页 https://aptredlight-growth-desk.wk20230211.chatgpt.site/woocommerce/cms-setup.html 完成填写和复制，避免手动拼 JSON。
+
+1. 在 https://hpanel.hostinger.com/websites 选择 aptredlight.com。
+2. 打开“数据库 → 管理”，创建一个专用空 MySQL 数据库，创建或关联它的数据库用户，设置至少 12 位的新密码。
+   - 保存完整数据库名与完整数据库用户名，必须以 u469397229_ 开头。
+   - 不要选择已有业务数据库；程序会拒绝向非空数据库安装。
+   - 此处需要数据库密码，不是 SSH、GitHub 或 Hostinger 登录密码。
+3. 在上述私有配置页 填写数据库名、用户名、数据库密码、主机（通常 localhost）和管理通知邮箱，点“复制 Secret 内容”。本页不发送请求、不记录表单、不使用本地存储。
+4. 打开 https://github.com/wk20230211-arch/aptredlight/settings/secrets/actions/new
+   Name：APTREDLIGHT_CMS_DATABASE
+   Secret：在大框按 Ctrl+V，粘贴上一步复制的内容。
+   然后点击 Add secret。
+   如果已有同名 Secret，点铅笔图标更新。
+5. 回复“数据库 Secret 已保存”。我们重跑已准备的安装 job，无需重新运行 Windows PowerShell、提供管理员 ID 或重复登录 SSH。
+
+手动配置格式（只粘贴到 GitHub Secret，不发送聊天）：
+{"name":"u469397229_你的数据库名","user":"u469397229_你的用户名","password":"你的数据库密码","host":"localhost","admin_email":"你的管理邮箱"}
+如密码含引号或反斜杠，必须按 JSON 转义；建议使用随附页面自动生成。
+
+安装自动化范围：
+- 固定隔离目录 /home/u469397229/domains/aptredlight.com/public_html/cms。
+- 使用经过 SHA512 校验的固定版本 WP-CLI，验证 WordPress 官方文件校验值。
+- 先验证数据库账户范围、连接和空库，再安装 WordPress、WooCommerce 与已交付的 APTREDLIGHT 后台插件。
+- 生成运营使用的产品权限账号与媒体上传凭据；初次只读商品列表通过后，才允许工作台写入。
+- 不覆盖正式站首页、主题或其他既有目录，不伪造商品或认证数据。
+- 安装密钥仅通过 SSH 标准输入传输。集成凭据以固定公钥加密后进入回执，私钥不入仓库和 Actions。
+
+实际成功判定：
+- cms-bootstrap-receipt.json 的 status=ready，并有 WordPress、WooCommerce 和真实只读检查结果。
+- “validate”成功仅代表自动化代码通过测试；needs_setup/blocked/unknown 均不代表安装成功。
+- 安装完成后还要绑定工作台生产环境并进行真实产品、SKU、图片和草稿状态往返验证，才能记为全部接通。
+- 如安装中断且结果未知，先查私有回执和新 CMS 状态，不盲目重试或删除数据库。
+
+当前一次性回执加密公钥固定在 .hostinger/cms-receipt-public-key.pem。
+私钥由本次实施环境单独保管。若该实施环境失效且私钥遗失，应先进行回执密钥交接或重新生成受限 API 凭据，不把密文回执误称为已完成工作台绑定。
+
+独立 CMS 安装完成不等于静态官网已更新商品页；商品展示还要经过已审核资料与正式站发布流程。当前先验收后台与工作台的真实商品读写。
