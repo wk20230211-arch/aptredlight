@@ -45,3 +45,38 @@
 .about-hero,.about-cta,.about-evidence{overflow:hidden}.about-layout>*{min-width:0}.about-hero .lead{font-size:clamp(16px,1.65vw,19px)}.about-tile{transition:box-shadow .2s ease,transform .2s ease}.about-tile:hover{box-shadow:0 12px 25px #20232912;transform:translateY(-2px)}.about-tile a{color:#ac2831;font-weight:750;text-decoration:underline;text-underline-offset:4px}.about-evidence .wrap{max-width:1000px}.about-process article{min-width:0}.about-process p{line-height:1.7}.about-identity dd{overflow-wrap:anywhere}
 @media(max-width:860px){.about-hero .about-layout{gap:24px}.about-cta .wrap{display:block}.about-cta .actions{margin-top:24px}}
 @media(max-width:580px){.about-hero .about-layout{display:grid;grid-template-columns:1fr}.about-hero img{max-height:340px}.about-hero .actions .btn{width:100%}.about-tile{padding:22px}.about-process{gap:18px}.about-cta .actions .btn{width:100%}body{overflow-x:hidden}}
+
+/* APTREDLIGHT unified B2B editorial layout v1.4.0 */
+:root{--apt-ink:#202329;--apt-white:#fff;--apt-paper:#faf8f6;--apt-red:#bd3439;--apt-border:#e9e4df}
+body{background:#fff;color:var(--apt-ink)}
+h1,h2,h3{text-wrap:balance}p{overflow-wrap:break-word}
+.wrap{width:min(1200px,calc(100% - 48px))}
+header{background:rgba(255,255,255,.97);border-bottom:1px solid var(--apt-border)}
+header .brand{letter-spacing:-.8px}
+header .navcta,.btn.primary{background:var(--apt-red);color:white;border-radius:5px}
+header .navcta:hover,.btn.primary:hover{background:#92262d;color:#fff}
+.section{padding-top:clamp(58px,7.5vw,100px);padding-bottom:clamp(58px,7.5vw,100px)}
+.section h2,.about-cta h2{letter-spacing:-1.15px;line-height:1.17}
+.eyebrow{color:var(--apt-red);letter-spacing:1.7px}
+.about-hero,.article-hero,.resource{background:#f8f3ef}
+.about-hero h1{letter-spacing:-1.7px}
+.about-grid,.sku-grid,.category-preview-grid,.quality-grid,.about-proof-grid,.about-contact-grid{row-gap:22px}
+.about-tile,.about-proof-card,.about-contact-card,.sku-card,.category-preview-item{border-color:var(--apt-border)}
+.about-tile,.about-proof-card,.about-contact-card{box-shadow:0 6px 25px #25202b08}
+.about-tile:hover,.about-proof-card:hover,.about-contact-card:hover{box-shadow:0 16px 32px #25202b12}
+.about-identity,.rfq-assist,.contact-download{border-color:var(--apt-border)}
+.product-disclosure,.about-note{line-height:1.7}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #de8e8b;outline-offset:3px}
+footer{background:#1c2025}
+@media(max-width:1100px){header .navlinks{background:#fff}header .navlinks .navcta{color:#fff}}
+@media(max-width:700px){
+  .wrap{width:calc(100% - 32px)}
+  .about-hero h1,.article-hero h1{font-size:clamp(34px,8.5vw,48px)}
+  .about-grid,.about-proof-grid,.about-contact-grid,.quality-grid,.category-preview-grid{grid-template-columns:1fr}
+  .about-process{grid-template-columns:1fr 1fr}
+  .about-identity{padding:20px}
+  .section-top,.showroom-head{align-items:stretch}
+  .actions .btn{max-width:100%}
+}
+@media(max-width:420px){.about-process{grid-template-columns:1fr}.brand{font-size:19px}}
+@media(prefers-reduced-motion:reduce){.about-tile,.about-proof-card,.about-contact-card,.sku-card{transition:none;transform:none}}
