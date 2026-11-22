@@ -1,5 +1,5 @@
 name: Install isolated WordPress CMS and WooCommerce
-# Accept the existing SQL binding; administrator contact stays encrypted.
+# Accept the existing SQL binding; use server-local MySQL and encrypted contact.
 # Fresh-only setup; staging and encrypted receipts stay outside the web root.
 
 on:
