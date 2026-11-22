@@ -17,6 +17,72 @@ class Gate(Exception):
     pass
 
 
+def readonly_path_observations(root, private):
+    """Observe only fixed brand paths when a prerequisite disappears. No writes."""
+    home=private.parent
+    domain=root.parent
+    alternate=home/'domains/www.aptredlight.com'
+    allowed=(domain,alternate)
+    def metadata(path):
+        value={'exists':False,'symlink':False}
+        try:
+            for ancestor in reversed(path.parents):
+                if stat.S_ISLNK(os.lstat(ancestor).st_mode):
+                    value.update(existence_unknown=True,ancestor_symlink_not_followed=True)
+                    return value
+            info=os.lstat(path)
+            value.update(exists=True,symlink=stat.S_ISLNK(info.st_mode),uid=info.st_uid,
+                         mode=oct(stat.S_IMODE(info.st_mode)),
+                         type='directory' if stat.S_ISDIR(info.st_mode) else 'file' if stat.S_ISREG(info.st_mode) else 'symlink' if stat.S_ISLNK(info.st_mode) else 'other')
+            if value['symlink'] and any(path==base or base in path.parents for base in allowed):
+                target=os.readlink(path)
+                candidate=Path(os.path.normpath(str(path.parent/target))) if not os.path.isabs(target) else Path(os.path.normpath(target))
+                if any(candidate==base or base in candidate.parents for base in allowed):
+                    value['link_target_within_brand_scope']=True
+                    value['link_target']=str(candidate)
+                    # lstat the known branded destination, never follow an
+                    # unknown symlink or observe a different account/domain.
+                    if any(p.is_symlink() for p in candidate.parents):
+                        value['link_target_ancestor_symlink_not_followed']=True
+                        return value
+                    target_info=os.lstat(candidate)
+                    value['link_target_exists']=True
+                    value['link_target_symlink']=stat.S_ISLNK(target_info.st_mode)
+                    value['link_target_type']='directory' if stat.S_ISDIR(target_info.st_mode) else 'file' if stat.S_ISREG(target_info.st_mode) else 'symlink' if stat.S_ISLNK(target_info.st_mode) else 'other'
+                else:value['link_target_within_brand_scope']=False
+        except OSError as error:value['error_class']=type(error).__name__
+        return value
+    paths={'home_parent':home.parent,'account_home':home,'domains':home/'domains',
+           'brand_domain':domain,'public_html':root,'alternate_brand_domain':alternate,
+           'alternate_public_html':alternate/'public_html',
+           'known_quarantined_core':private/'quarantine/core-45022484164-1'}
+    result={'fixed_paths':{label:metadata(path) for label,path in paths.items()}}
+    # These are the two branded domain directories only; never enumerate all
+    # domains, home, the credential directories, or arbitrary symlink targets.
+    result['brand_directory_names']={}
+    for label,path in (('brand_domain',domain),('alternate_brand_domain',alternate)):
+        entry={'names':[],'truncated':False}
+        try:
+            if any(p.is_symlink() for p in (path,*path.parents)):
+                entry['state']='symlink_not_enumerated'
+            else:
+                with os.scandir(path) as entries:
+                    for item in entries:
+                        if len(entry['names'])>=64:entry['truncated']=True;break
+                        name=item.name
+                        entry['names'].append(name[:128] if all(ord(c)>=32 and ord(c)!=127 for c in name) else '<nonprintable-name>')
+                entry['names'].sort();entry['state']='listed'
+        except OSError as error:entry['error_class']=type(error).__name__
+        result['brand_directory_names'][label]=entry
+    result['runtime_context']={}
+    for label,load in (('path_home',Path.home),('current_directory',Path.cwd)):
+        try:
+            path=load()
+            result['runtime_context'][label]={'path':str(path),'is_expected_home':path==home,**metadata(path)}
+        except OSError as error:result['runtime_context'][label]={'error_class':type(error).__name__}
+    return result
+
+
 def quarantine_failed_core(root, cms, private, receipt, owner_uid):
     report = {'schema': 1, 'status': 'blocked', 'cms_url': 'https://www.aptredlight.com/cms',
               'known_failure_run': '45022484164-1', 'writes_performed': False,
@@ -67,6 +133,8 @@ def quarantine_failed_core(root, cms, private, receipt, owner_uid):
         for path,label in fixed_paths.items():
             if label != 'bootstrap_lock' and not report['prerequisites'][label]:
                 report['missing_prerequisite'] = label
+                if not report['prerequisites']['root']:
+                    report['readonly_observations']=readonly_path_observations(root,private)
                 raise Gate('required_path_missing')
         for path in (root, cms, private, private/'receipts'):
             plain(path, 'dir')
@@ -151,7 +219,7 @@ def quarantine_failed_core(root, cms, private, receipt, owner_uid):
 
 
 REMOTE = ('import fcntl,hashlib,json,os,stat\nfrom pathlib import Path\n'
-          + 'class Gate(Exception):\n    pass\n' + inspect.getsource(quarantine_failed_core) + '''
+          + 'class Gate(Exception):\n    pass\n' + inspect.getsource(readonly_path_observations) + '\n' + inspect.getsource(quarantine_failed_core) + '''
 HOME=Path('/home/u469397229')
 ROOT=HOME/'domains/aptredlight.com/public_html'
 PRIVATE=HOME/'.aptredlight-cms-bootstrap'
