@@ -80,3 +80,8 @@ footer{background:#1c2025}
 }
 @media(max-width:420px){.about-process{grid-template-columns:1fr}.brand{font-size:19px}}
 @media(prefers-reduced-motion:reduce){.about-tile,.about-proof-card,.about-contact-card,.sku-card{transition:none;transform:none}}
+
+/* Official APTREDLIGHT wordmark from brand-owned reference artwork */
+header a.brand{display:inline-flex;align-items:center;flex:none;white-space:nowrap;line-height:1}
+header a.brand img{display:block;width:clamp(168px,15vw,205px);height:auto;aspect-ratio:9.6/1;object-fit:contain}
+@media(max-width:570px){header a.brand img{width:176px}}
