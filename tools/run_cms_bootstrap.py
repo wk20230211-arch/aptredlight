@@ -83,7 +83,14 @@ def database_secret(raw):
         require(type(value['port']) is int and value['port']==3306, 'database_port_invalid')
         require(isinstance(value['charset'],str) and value['charset'].lower() in ('utf8','utf8mb4'),
                 'database_charset_invalid')
-        value={'name':value['database'],'user':value['username'],'password':value['password'],'host':value['host']}
+        exported_host=value['host']
+        require(isinstance(exported_host,str) and 1<=len(exported_host)<=253
+                and all(33<=ord(c)<=126 for c in exported_host)
+                and not any(c in exported_host for c in '/\\@?#%'), 'database_export_host_invalid')
+        # Hostinger's SQL export names the external connection host. Web-hosting
+        # applications use the MySQL service on the same verified SSH server.
+        # Discard this export-only address; never resolve or connect to it.
+        value={'name':value['database'],'user':value['username'],'password':value['password'],'host':'127.0.0.1'}
     else:
         require(set(value)==legacy_fields, "database_secret_fields_invalid")
     for key in ("name", "user"):
