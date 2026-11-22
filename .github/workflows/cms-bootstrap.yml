@@ -1,4 +1,5 @@
 name: Install isolated WordPress CMS and WooCommerce
+# Fresh-only setup; staging and encrypted receipts stay outside the web root.
 
 on:
   push:
