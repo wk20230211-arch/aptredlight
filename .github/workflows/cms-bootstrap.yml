@@ -113,7 +113,7 @@ jobs:
           fi
       - name: Prepare a private administrator contact channel (public key only)
         run: python3 tools/prepare_cms_contact.py --known-hosts "$RUNNER_TEMP/cms-known-hosts"
-      - name: Verify the known failed core and retain it in private quarantine
+      - name: Inspect fixed hosting paths and recover only the known failed core
         run: >-
           python3 tools/quarantine_failed_core.py
           --runner tools/run_cms_bootstrap.py
