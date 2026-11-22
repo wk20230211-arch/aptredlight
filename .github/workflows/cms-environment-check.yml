@@ -1,0 +1,159 @@
+name: Inspect CMS PHP and database prerequisites (read only)
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cms-environment-check.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aptredlight-cms-environment-check
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Start a read-only CMS preflight receipt
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,pathlib
+          value={'schema':1,'checked_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                 'mode':'read_only','status':'pending','writes_performed':False,
+                 'ssh_identity':{'status':'not_run'},'remote':{'status':'not_run'}}
+          pathlib.Path(os.environ['RUNNER_TEMP'],'cms-environment-check.json').write_text(json.dumps(value,indent=2)+'\n')
+          PY
+      - name: Resolve fixed hosting target and verify its pinned ED25519 key
+        env:
+          HOSTINGER_SSH_HOST: ${{ vars.HOSTINGER_SSH_HOST }}
+          HOSTINGER_SSH_PORT: ${{ vars.HOSTINGER_SSH_PORT }}
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, pathlib, subprocess, sys
+          sys.path.insert(0, 'tools')
+          from verify_hostinger_identity import read_config, valid_host, valid_port, verify, write_receipt
+          receipt_path = pathlib.Path(os.environ['RUNNER_TEMP'], 'cms-environment-check.json')
+          report = json.loads(receipt_path.read_text(encoding='utf-8'))
+          try:
+              config = read_config(pathlib.Path('.hostinger/deploy.json').resolve())
+              host = valid_host((os.environ.get('HOSTINGER_SSH_HOST') or config['ssh_host']).strip())
+              port = valid_port(int(os.environ.get('HOSTINGER_SSH_PORT') or config['ssh_port']))
+              if config['ssh_user'] != 'u469397229' or config['web_root'] != '/home/u469397229/domains/aptredlight.com/public_html':
+                  raise ValueError('fixed_scope_mismatch')
+              result = subprocess.run(['ssh-keyscan', '-T', '10', '-p', str(port), '-t', 'ed25519', host],
+                                      capture_output=True, timeout=20, check=False)
+              if result.returncode or len(result.stdout) > 65536:
+                  raise ValueError('keyscan_failed')
+              known_hosts = result.stdout.decode('utf-8')
+              identity = verify(config, known_hosts, host, port)
+              path = pathlib.Path(os.environ['RUNNER_TEMP'], 'wp-readonly-known-hosts')
+              path.write_text(known_hosts, encoding='utf-8')
+              path.chmod(0o600)
+              write_receipt(pathlib.Path(os.environ['RUNNER_TEMP'], 'wp-readonly-identity.json'), identity)
+              report['ssh_identity'] = identity
+              with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as out:
+                  out.write('WP_DIAG_SSH_HOST=' + host + '\nWP_DIAG_SSH_PORT=' + str(port) + '\nWP_DIAG_SSH_USER=u469397229\n')
+          except Exception:
+              report['ssh_identity'] = {'status': 'failed', 'failure_class': 'pinned_identity_not_verified'}
+              receipt_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+              print(json.dumps(report['ssh_identity']))
+              sys.exit(1)
+          receipt_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(identity))
+          PYCODE
+
+      - name: Load the existing deployment key in an ephemeral agent
+        env:
+          HOSTINGER_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          if [ -z "$HOSTINGER_SSH_PRIVATE_KEY" ]; then
+            python3 - <<'PYCODE'
+          import json, os, pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'],'cms-environment-check.json')
+          r=json.loads(p.read_text());r['remote']={'status':'not_run','failure_class':'deployment_key_missing'}
+          p.write_text(json.dumps(r,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(r['remote']))
+          PYCODE
+            exit 1
+          fi
+          eval "$(ssh-agent -s)" > /dev/null
+          printf 'SSH_AUTH_SOCK=%s\nSSH_AGENT_PID=%s\n' "$SSH_AUTH_SOCK" "$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          if ! printf '%s\n' "$HOSTINGER_SSH_PRIVATE_KEY" | ssh-add - > /dev/null 2>&1; then
+            python3 - <<'PYCODE'
+          import json, os, pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'],'cms-environment-check.json')
+          r=json.loads(p.read_text());r['remote']={'status':'not_run','failure_class':'deployment_key_not_loadable'}
+          p.write_text(json.dumps(r,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(r['remote']))
+          PYCODE
+            exit 1
+          fi
+
+      - name: Read PHP, existing CMS markers and default-client database capability only
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import json,os,pathlib,shlex,subprocess,sys
+          remote='\nimport datetime,json,os,pathlib,re,shutil,subprocess,time\nROOT=pathlib.Path(\'/home/u469397229/domains/aptredlight.com/public_html\')\nCMS=ROOT/\'cms\'\nCONFIGS=(pathlib.Path(\'/home/u469397229/.my.cnf\'),pathlib.Path(\'/home/u469397229/.config/mysql/my.cnf\'))\nEXTENSIONS=(\'mysqli\',\'pdo_mysql\',\'pdo_sqlite\',\'sqlite3\',\'zip\',\'curl\',\'mbstring\',\'xml\',\'openssl\',\'gd\',\'imagick\',\'fileinfo\')\nDEADLINE=time.monotonic()+190\nMAX_OUTPUT=65536\n\ndef safe_chain(path):\n    return not any(p.is_symlink() for p in (path,*path.parents))\n\ndef run(args,timeout=12):\n    remaining=DEADLINE-time.monotonic()\n    if remaining<=0:\n        return None\n    child_env=os.environ.copy()\n    child_env[\'MYSQL_HISTFILE\']=\'/dev/null\'\n    child_env.pop(\'MYSQL_PWD\',None)\n    try:\n        value=subprocess.run(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,\n                             timeout=min(timeout,remaining),check=False,env=child_env)\n        if len(value.stdout)>MAX_OUTPUT or len(value.stderr)>MAX_OUTPUT:\n            return None\n        return value\n    except Exception:\n        return None\n\ndef parse_grants(text):\n    create_database=False;create_user=False;scope=\'none\';matched=False\n    for line in text.splitlines():\n        value=re.match(r\'^\\s*GRANT\\s+(.+?)\\s+ON\\s+(.+?)\\s+TO\\b\',line,re.I)\n        if not value:\n            continue\n        matched=True\n        privileges={item.strip().upper() for item in value.group(1).split(\',\')}\n        target=re.sub(r\'\\s+\',\'\',value.group(2)).replace(\'`\',\'\')\n        global_scope=target==\'*.*\'\n        all_privileges=bool(privileges.intersection({\'ALL\',\'ALL PRIVILEGES\'}))\n        can_create=\'CREATE\' in privileges or all_privileges\n        if can_create:\n            create_database=True\n            scope=\'global\' if global_scope else (\'scoped\' if scope!=\'global\' else scope)\n        if global_scope and (\'CREATE USER\' in privileges or all_privileges):\n            create_user=True\n    return {\'has_create_database\':create_database,\'has_create_user\':create_user,\n            \'create_database_scope\':scope,\'grant_rows_parsed\':matched,\n            \'grant_interpretation\':\'direct SHOW GRANTS only; role-derived privileges are not expanded\'}\n\nreport={\'schema\':1,\'checked_at\':datetime.datetime.now(datetime.timezone.utc).isoformat(),\n        \'mode\':\'read_only\',\'status\':\'completed\',\'writes_performed\':False,\n        \'wordpress_installation_performed\':False,\'database_creation_performed\':False,\n        \'limitations\':[\'CLI PHP may differ from the web hosting PHP runtime.\',\n                       \'Writable means a metadata access check, not a test file creation.\',\n                       \'Direct SHOW GRANTS does not expand role-derived privileges.\',\n                       \'Database names, usernames, passwords and client configuration contents are never reported.\']}\n\nroot_safe=safe_chain(ROOT)\ncms_safe=root_safe and safe_chain(CMS)\ncms_exists=CMS.exists() or CMS.is_symlink()\ncms_is_dir=cms_safe and CMS.is_dir()\nempty=None\nif cms_is_dir:\n    try:\n        empty=next(CMS.iterdir(),None) is None\n    except Exception:\n        empty=None\nreport[\'filesystem\']={\'webroot_exists\':root_safe and ROOT.is_dir(),\n                      \'webroot_writable\':bool(root_safe and ROOT.is_dir() and os.access(ROOT,os.W_OK)),\n                      \'cms_exists\':cms_exists,\'cms_is_directory\':cms_is_dir,\n                      \'cms_is_empty\':empty,\'cms_is_symlink\':CMS.is_symlink(),\n                      \'cms_path_safe\':cms_safe,\n                      \'cms_wordpress_markers\':{name:bool(cms_safe and (CMS/name).is_file() and not (CMS/name).is_symlink())\n                                               for name in (\'index.php\',\'wp-config.php\',\'wp-load.php\')},\n                      \'cms_wp_admin_exists\':bool(cms_safe and (CMS/\'wp-admin\').is_dir() and not (CMS/\'wp-admin\').is_symlink())}\n\nphp=shutil.which(\'php\')\nreport[\'php\']={\'cli_available\':bool(php),\'query_status\':\'not_run\',\'version\':None,\n               \'extensions\':{name:False for name in EXTENSIONS}}\nif php:\n    php_array=\'array(\'+\',\'.join(repr(name) for name in EXTENSIONS)+\')\'\n    code=\'$e=array();foreach(\'+php_array+\' as $n){$e[$n]=extension_loaded($n);}echo json_encode(array("version"=>PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION.".".PHP_RELEASE_VERSION,"extensions"=>$e));\'\n    value=run([php,\'-r\',code])\n    try:\n        result=json.loads(value.stdout) if value and value.returncode==0 else None\n        if not isinstance(result,dict) or not re.fullmatch(r\'\\d+\\.\\d+\\.\\d+\',result.get(\'version\',\'\')):\n            raise ValueError()\n        extensions=result.get(\'extensions\')\n        if not isinstance(extensions,dict) or set(extensions)!=set(EXTENSIONS) or any(type(v) is not bool for v in extensions.values()):\n            raise ValueError()\n        report[\'php\'].update(query_status=\'completed\',version=result[\'version\'],extensions=extensions)\n    except Exception:\n        report[\'php\'][\'query_status\']=\'query_failed_or_invalid\'\n\nmysql=shutil.which(\'mysql\');mariadb=shutil.which(\'mariadb\')\nexisting=[path for path in CONFIGS if path.is_file()]\ndb={\'mysql_client_available\':bool(mysql),\'mariadb_client_available\':bool(mariadb),\n    \'default_config_exists\':{\'.my.cnf\':CONFIGS[0].is_file(),\'.config/mysql/my.cnf\':CONFIGS[1].is_file()},\n    \'state\':\'no_database_credentials_available\',\'auth_success\':False,\n    \'configured_database_nonempty\':None,\'has_create_database\':False,\'has_create_user\':False,\n    \'grants_status\':\'not_run\',\'create_database_scope\':\'none\'}\nreport[\'database\']=db\nclient=mysql or mariadb\nif existing and not client:\n    db[\'state\']=\'mysql_client_unavailable\'\nelif existing and client:\n    db[\'state\']=\'default_client_authentication_not_confirmed\'\n    for config in existing:\n        # The executable reads the existing default client file; this script never opens it.\n        # Override initialization commands with fixed read-only SQL and disable local infile/history.\n        args=[client,\'--defaults-file=\'+str(config),\'--batch\',\'--skip-column-names\',\n              \'--skip-auto-rehash\',\'--connect-timeout=8\',\'--local-infile=0\',\'--init-command=DO 0\']\n        value=run(args+[\'--execute=SELECT 1\'])\n        if not value or value.returncode!=0 or value.stdout.decode(\'utf-8\',errors=\'replace\').strip().splitlines()[-1:]!=[\'1\']:\n            continue\n        db.update(state=\'default_client_authentication_succeeded\',auth_success=True)\n        configured=run(args+["--execute=SELECT IF(DATABASE() IS NULL OR DATABASE()=\'\',\'0\',\'1\')"])\n        if configured and configured.returncode==0:\n            lines=configured.stdout.decode(\'utf-8\',errors=\'replace\').strip().splitlines()\n            if lines and lines[-1] in (\'0\',\'1\'):\n                db[\'configured_database_nonempty\']=lines[-1]==\'1\'\n        grants=run(args+[\'--execute=SHOW GRANTS\'])\n        if grants and grants.returncode==0:\n            parsed=parse_grants(grants.stdout.decode(\'utf-8\',errors=\'replace\'))\n            db.update(parsed);db[\'grants_status\']=\'parsed\' if parsed[\'grant_rows_parsed\'] else \'not_parsed\'\n        else:\n            db[\'grants_status\']=\'unavailable\'\n        break\nprint(json.dumps(report,separators=(\',\',\':\')))\n'
+          path=pathlib.Path(os.environ['RUNNER_TEMP'],'cms-environment-check.json')
+          receipt=json.loads(path.read_text())
+          command='python3 -c '+shlex.quote(remote)
+          args=['ssh','-F','/dev/null','-T','-p',os.environ['WP_DIAG_SSH_PORT'],
+                '-o','BatchMode=yes','-o','NumberOfPasswordPrompts=0','-o','ConnectTimeout=15',
+                '-o','ServerAliveInterval=5','-o','ServerAliveCountMax=2','-o','StrictHostKeyChecking=yes',
+                '-o','UserKnownHostsFile='+str(pathlib.Path(os.environ['RUNNER_TEMP'],'wp-readonly-known-hosts')),
+                '-o','ForwardAgent=no','-o','ClearAllForwardings=yes','-o','PermitLocalCommand=no',
+                '-o','UpdateHostKeys=no','-o','LogLevel=ERROR',
+                os.environ['WP_DIAG_SSH_USER']+'@'+os.environ['WP_DIAG_SSH_HOST'],command]
+          try:
+              value=subprocess.run(args,input=b'',capture_output=True,timeout=230,check=False)
+              if value.returncode or len(value.stdout)>131072:
+                  receipt['remote']={'status':'failed','failure_class':'ssh_or_readonly_probe_failed'}
+              else:
+                  result=json.loads(value.stdout)
+                  assert result.get('mode')=='read_only' and result.get('status')=='completed'
+                  assert result.get('writes_performed') is False
+                  assert set(result.get('php',{}).get('extensions',{}))==set(('mysqli','pdo_mysql','pdo_sqlite','sqlite3','zip','curl','mbstring','xml','openssl','gd','imagick','fileinfo'))
+                  receipt['remote']=result
+          except subprocess.TimeoutExpired:
+              receipt['remote']={'status':'failed','failure_class':'ssh_probe_timeout'}
+          except Exception:
+              receipt['remote']={'status':'failed','failure_class':'remote_receipt_not_confirmed'}
+          receipt['status']='completed' if receipt['remote'].get('status')=='completed' else 'failed'
+          path.write_text(json.dumps(receipt,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(receipt,ensure_ascii=False))
+          sys.exit(0 if receipt['status']=='completed' else 1)
+          PYCODE
+      - name: Always remove the ephemeral SSH agent and runner public-key file
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${SSH_AGENT_PID:-}" ]; then
+            ssh-add -D > /dev/null 2>&1 || true
+            ssh-agent -k > /dev/null 2>&1 || true
+          fi
+          rm -f "$RUNNER_TEMP/wp-readonly-known-hosts"
+
+      - name: Preserve only redacted preflight receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cms-environment-check
+          path: |
+            ${{ runner.temp }}/cms-environment-check.json
+            ${{ runner.temp }}/wp-readonly-identity.json
+          if-no-files-found: warn
+          retention-days: 7
