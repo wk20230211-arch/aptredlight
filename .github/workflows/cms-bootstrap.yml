@@ -113,12 +113,12 @@ jobs:
           fi
       - name: Prepare a private administrator contact channel (public key only)
         run: python3 tools/prepare_cms_contact.py --known-hosts "$RUNNER_TEMP/cms-known-hosts"
-      - name: Diagnose the protected failed core download (read only)
+      - name: Preserve only our known uninitialised failed download outside the website
         run: >-
-          python3 tools/diagnose_cms_core.py
+          python3 tools/quarantine_failed_core.py
           --runner tools/run_cms_bootstrap.py
           --known-hosts "$RUNNER_TEMP/cms-known-hosts"
-          --receipt "$RUNNER_TEMP/core-diagnostic.json"
+          --receipt "$RUNNER_TEMP/core-quarantine.json"
       - name: Install only into an empty CMS directory and an empty dedicated MySQL database
         env:
           APTREDLIGHT_CMS_DATABASE: ${{ secrets.APTREDLIGHT_CMS_DATABASE }}
@@ -137,7 +137,7 @@ jobs:
           path: |
             ${{ runner.temp }}/cms-bootstrap-receipt.json
             ${{ runner.temp }}/cms-identity-receipt.json
-            ${{ runner.temp }}/core-diagnostic.json
+            ${{ runner.temp }}/core-quarantine.json
           if-no-files-found: warn
           retention-days: 7
       - name: Summarize the actual CMS state without credential contents
