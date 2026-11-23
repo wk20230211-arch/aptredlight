@@ -1,6 +1,20 @@
 (()=>{
  const nav=document.querySelector('.journal-header #nav'),menu=document.querySelector('.journal-header #menu');
  if(!nav||!menu)return;
+ // Company pages live in WordPress on the canonical site, including from the Sites mirror.
+ const companyCms='https://www.aptredlight.com/cms/';
+ if(!nav.querySelector('[data-cms-about]')){
+  const region=document.createElement('div');region.className='cms-about-nav';region.dataset.cmsAbout='true';
+  const parent=document.createElement('a');parent.className='cms-about-link';parent.href=companyCms+'about-us/';parent.textContent='About Us';
+  const details=document.createElement('details');details.className='journal-menu cms-about-menu';
+  const summary=document.createElement('summary');summary.setAttribute('aria-label','Toggle About Us submenu');
+  const sr=document.createElement('span');sr.className='cms-about-sr';sr.textContent='About Us submenu';summary.append(sr);
+  const panel=document.createElement('div');panel.className='journal-dropdown';
+  [['Certificate','certificate'],['Factory','factory'],['Exhibition','exhibition'],['Video','video'],['Company History','company-history']].forEach(([label,slug])=>{
+   const link=document.createElement('a');link.href=companyCms+slug+'/';link.textContent=label;panel.append(link);
+  });
+  details.append(summary,panel);region.append(parent,details);nav.insertBefore(region,nav.querySelector('[data-library-menu]'));
+ }
  const groups=[...nav.querySelectorAll('details')];
  const hoverMedia=window.matchMedia('(min-width: 981px) and (hover: hover) and (pointer: fine)');
  const states=new Map();
@@ -24,22 +38,23 @@
    summary.setAttribute('aria-expanded',String(group.open));
    if(group.open)groups.forEach(other=>{if(other!==group)setOpen(other,false)});
   });
-  group.addEventListener('pointerenter',event=>{
+  const region=group.closest('[data-cms-about]')||group;
+  region.addEventListener('pointerenter',event=>{
    if(!hoverMedia.matches||event.pointerType==='touch')return;
    state.hovered=true;clearTimeout(state.timer);openGroup(group);
   });
-  group.addEventListener('pointerleave',()=>{
+  region.addEventListener('pointerleave',()=>{
    state.hovered=false;clearTimeout(state.timer);
    if(!hoverMedia.matches)return;
    // Let the pointer cross the small gap without collapsing the panel.
    state.timer=setTimeout(()=>{
-    if(!state.hovered&&!group.contains(document.activeElement))setOpen(group,false);
+    if(!state.hovered&&!region.contains(document.activeElement))setOpen(group,false);
    },160);
   });
-  group.addEventListener('focusout',()=>{
+  region.addEventListener('focusout',()=>{
    clearTimeout(state.timer);
    state.timer=setTimeout(()=>{
-    if(!group.contains(document.activeElement)&&!state.hovered)setOpen(group,false);
+    if(!region.contains(document.activeElement)&&!state.hovered)setOpen(group,false);
    },0);
   });
   summary.addEventListener('keydown',event=>{
