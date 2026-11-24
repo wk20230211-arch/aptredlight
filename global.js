@@ -82,7 +82,16 @@
  const labels=JSON.parse(document.getElementById('locale-ui').textContent),form=document.getElementById('intl-inquiry'),cards=[...document.querySelectorAll('.intl-card')];
  let category='all';const search=document.getElementById('intl-search');
  function filter(){let n=0;const q=(search?.value||'').toLocaleLowerCase();cards.forEach(c=>{const show=(category==='all'||c.dataset.category===category)&&c.textContent.toLocaleLowerCase().includes(q);c.hidden=!show;if(show)n++});const out=document.getElementById('intl-count');if(out)out.textContent=n+' '+labels.count;}
- document.querySelectorAll('[data-category-filter]').forEach(b=>b.addEventListener('click',()=>{category=b.dataset.categoryFilter;document.querySelectorAll('[data-category-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));filter()}));search?.addEventListener('input',filter);filter();
+ const categoryButtons=[...document.querySelectorAll('[data-category-filter]')];
+ function selectCategory(key){const matching=categoryButtons.find(b=>b.dataset.categoryFilter===key);if(!matching)return false;category=key;categoryButtons.forEach(b=>b.setAttribute('aria-pressed',String(b===matching)));filter();return true}
+ categoryButtons.forEach(b=>b.addEventListener('click',()=>selectCategory(b.dataset.categoryFilter)));search?.addEventListener('input',filter);
+ const requestedCategory=new URLSearchParams(location.search).get('category');if(!selectCategory(requestedCategory))filter();
+ // Reapply a selected category even when the browser treats the link as a same-document hash navigation.
+ document.getElementById('nav')?.addEventListener('click',event=>{
+  const a=event.target.closest?.('a[href]');if(!a||event.defaultPrevented||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
+  const url=new URL(a.href,location.href);if(url.origin!==location.origin||url.pathname!==location.pathname||url.hash!=='#products')return;
+  if(search)search.value='';selectCategory(url.searchParams.get('category')||'all');
+ });
  document.querySelectorAll('[data-wave]').forEach(b=>b.addEventListener('click',()=>{b.setAttribute('aria-pressed',String(b.getAttribute('aria-pressed')!=='true'))}));
  const waveButton=document.getElementById('wave-transfer');waveButton?.addEventListener('click',()=>{const waves=[...document.querySelectorAll('[data-wave][aria-pressed=true]')].map(b=>b.dataset.wave+' nm').join(' + ');form.elements.message.value=[labels.form[17]+': '+(waves||'—'),form.elements.message.value].filter(Boolean).join('\n');document.getElementById('wave-status').textContent=labels.form[19];document.getElementById('intl-prepared').hidden=true;});
  const config=document.getElementById('intl-platform');document.getElementById('config-transfer')?.addEventListener('click',()=>{form.elements.product.value=config.value;form.elements.message.value=[labels.form[8]+': '+document.getElementById('intl-config-message').value,form.elements.message.value].filter(Boolean).join('\n');document.getElementById('intl-prepared').hidden=true;});
