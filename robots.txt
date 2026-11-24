@@ -1,3 +1,4 @@
 User-agent: *
 Allow: /
 Sitemap: https://www.aptredlight.com/sitemap.xml
+Sitemap: https://www.aptredlight.com/cms/aptredlight-public-sitemap.xml

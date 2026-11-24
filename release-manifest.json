@@ -898,8 +898,8 @@
     },
     {
       "path": "robots.txt",
-      "size": 72,
-      "sha256": "f8ef731088f076b5fc84b02555b7a245761cae20489c901bfb569149f022278b"
+      "size": 144,
+      "sha256": "43b1b6d761a4941094a8b513a0d7c0623c96d9a5496cc5ffb14f3d959a0b9d38"
     },
     {
       "path": "sitemap.xml",
